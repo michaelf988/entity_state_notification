@@ -1,87 +1,40 @@
 blueprint:
-  name: "💬 Entity State Notification"
-  description: "
-
-    ## 💥 New In Version 3 
-
-    🔃 support for multiple states or nummeric comarision (above/below)
-
-    🤯 new logic for better troubleshooting and further development
-
-    📱 multiple groups and devices for notifications possible
-
-
-    ## 🤙 Features
-
-    🎯 monitor entities for a specific state and trigger a notification
-
-    📝 modify message, title, icon, color, channel, group etc
-
-    🧷 persistent notification until entity leaves specified state
-
-    🔄 periodical notification with stop functionality
-
-    🎬 custom actions
-
-    ✅ custom conditions
-
-
-    ℹ️ **Hints**
-
-    If you want to test this automation, you need to change the state of an observed entity. You can do this in the developer options.
-    Simply filter for your entity, select it and change the state to the trigger state manually.
-
-
-    📖 **Documentation:** [panhans.github.io/HomeAssistant/](https://panhans.github.io/HomeAssistant/)
-
-
-    ⛑️ **Help & FAQ**: [Entity State Notification](https://community.home-assistant.io/t/entity-state-notification)
-
-  
-    💿 **Version**: 1.0
-
-
-    [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Q5Q3QEH52)
-    "
+  name: "💬 Zustandsbenachrichtigung (Blueprint v1.0)"
+  description: >
+    Benachrichtigt dich, wenn ausgewählte Entitäten einen Zielzustand erreichen
+    (oder numerisch darüber/darunter liegen). Optional periodische Wiederholung,
+    Aktionen und Bedingungen.
   source_url: https://github.com/panhans/HomeAssistant/blob/main/blueprints/automation/panhans/entity_state_notification.yaml
   domain: automation
 
   input:
     sensor_section:
-      name: Entities / Equal Comparison
+      name: Entitäten / Gleichheitsvergleich
       icon: mdi:equal-box
       collapsed: true
       input:
         input_entities:
-          name: "🖲️ Observed Entities"
+          name: "🖲️ Beobachtete Entitäten"
           description: >
-            `target`
-
-
-            Entities which trigger the notification.
+            Entitäten, die die Benachrichtigung auslösen.
           default: []
           selector:
             entity:
               multiple: true
 
         input_entity_states:
-          name: "🟢 Entity States"
+          name: "🟢 Zielzustände"
           description: >
-            `target`
-
-
-            Target state that triggers the automation.
+            Zustände, die die Automatisierung auslösen.
           default: []
           selector:
             text:
               multiple: true
 
         input_entity_state_duration:
-          name: "⏲️ State Duration"
+          name: "⏲️ Verweilzeit im Zielzustand"
           description: >
-            `target`
-
-            Duration the entity must be in target state.
+            Dauer, die die Entität im Zielzustand sein muss.
           default:
             hours: 0
             minutes: 0
@@ -90,17 +43,14 @@ blueprint:
             duration:
 
     numeric_entity_section:
-      name: Numeric Above/Below Comparison
+      name: Numerischer Vergleich (über/unter)
       icon: mdi:code-greater-than
       collapsed: true
       input:
         input_numeric_entities:
-          name: "🖲️ Observed Numeric Entities"
+          name: "🖲️ Beobachtete numerische Entitäten"
           description: >
-            `target`
-
-
-            Entities which trigger the notification.
+            Entitäten, die die Benachrichtigung auslösen.
           default: []
           selector:
             entity:
@@ -109,26 +59,20 @@ blueprint:
         input_numeric_entity_operator:
           name: "🔃 Operator"
           description: >
-            `target`
-
-
-            Operator to compare the state of the entity.
+            Operator für den Vergleich mit dem Zielwert.
           default: "above"
           selector:
             select:
               options:
-                - label: "▶️ above"
+                - label: "▶️ über"
                   value: "above"
-                - label: "◀️ below"
+                - label: "◀️ unter"
                   value: "below"
 
         input_numeric_entity_state:
-          name: "🟢 Entity State"
+          name: "🟢 Zielwert"
           description: >
-            `target`
-
-
-            Target state that triggers the automation.
+            Wert, der die Automatisierung auslöst.
           default: 0
           selector:
             number:
@@ -136,12 +80,9 @@ blueprint:
               min: -9999999999
 
         input_numeric_entity_state_duration:
-          name: "⏲️ State Duration"
+          name: "⏲️ Verweilzeit im Zielzustand"
           description: >
-            `target`
-
-
-            Duration the entity must be in target state.
+            Dauer, die die Entität im Zielzustand sein muss.
           default:
             hours: 0
             minutes: 0
@@ -150,17 +91,14 @@ blueprint:
             duration:
 
     notifcation_section:
-      name: Notification Settings
+      name: Benachrichtigung
       icon: mdi:chat
       collapsed: true
       input:
         input_notify_devices:
-          name: "📱 Device to notify"
+          name: "📱 Gerät(e) benachrichtigen"
           description: >
-            `notification`
-
-
-            Devices that receive the notification.
+            Geräte/Gruppen, die die Benachrichtigung erhalten.
           default: []
           selector:
             device:
@@ -169,145 +107,221 @@ blueprint:
                 integration: mobile_app
 
         input_notify_groups:
-          name: "🫂 Notification Group"
+          name: "🫂 Benachrichtigungsgruppen"
           description: >
-            `notification`
-
-
-            Name of the notification groups.
+            Namen von Notification-Gruppen (notify.Gruppenname).
           default: []
           selector:
             text:
               multiple: true
 
         input_title:
-          name: "📕 Notification Title"
+          name: "📕 Titel"
           description: >
-            `notification`
-
-
-            Title of the notification.
-          default: "{{ entity_name }} is {{ new_state }}"
+            Titel der Benachrichtigung.
+          default: "{{ entity_name }} ist {{ new_state }}"
 
         input_message:
-          name: "💬 Notification Message"
+          name: "💬 Nachricht"
           description: >
-            `notification`
-
-
-            Message of the notification.
-          default: "Keep in mind: {{ entity_name }} is {{ new_state }}"
+            Text der Benachrichtigung.
+          default: "Hinweis: {{ entity_name }} ist {{ new_state }}"
 
         input_persistent_notification:
-          name: "🪨 Persistent Notification"
+          name: "🪨 Persistente Benachrichtigung"
           description: >
-            `notification`
-
-            If turned on you can't swipe away the notification. It only disappears if the observed entity leave the target state combined with the operator.
+            Kann nicht weggewischt werden; verschwindet erst,
+            wenn die Entität den Zielzustand verlässt.
           default: false
           selector:
             boolean:
 
         input_notification_auto_delete:
-          name: "❌ Auto Close Notifications"
+          name: "❌ Auto-Schließen"
           description: >
-            `notification`
-
-
-            If enabled the notifications will be deleted automatically after the entity leaves the target state condition.
+            Benachrichtigungen automatisch schließen,
+            wenn die Zielzustands-Bedingung nicht mehr gilt.
           default: true
           selector:
             boolean:
 
         input_ha_notification:
-          name: "🏠 Persistent HomeAssistant Notification"
+          name: "🏠 HA-Benachrichtigung (Frontend)"
           description: >
-            `notification`
-
-
-            Creates a notification in your home assistant frontend.
+            Erstellt zusätzlich eine Persistente Benachrichtigung im HA-Frontend.
           default: false
           selector:
             boolean:
 
-    mobile_appearance_section:
-      name: Mobile Notification Appearance
-      icon: mdi:palette
+        # Neue Felder
+        input_interruption_level:
+          name: "⛔ Interruption Level (iOS)"
+          description: >
+            Einstellen, wie „dringlich“ die Benachrichtigung ist.
+          default: "active"
+          selector:
+            select:
+              options:
+                - passive
+                - active
+                - time-sensitive
+                - critical
+
+        input_custom_tag:
+          name: "🏷️ Tag"
+          description: >
+            Tag für die Benachrichtigung (zur späteren Identifikation).
+            Leer lassen, um einen Tag automatisch zu generieren.
+          default: ""
+          selector:
+            text:
+
+        input_ios_sound:
+          name: "🔊 iOS Sound"
+          description: >
+            Name des Sounds (z. B. default oder <Soundname>).
+          default: "default"
+          selector:
+            text:
+
+        input_group_text:
+          name: "📑 Group"
+          description: >
+            Gruppiere Benachrichtigungen über diese Kennung.
+          default: ""
+          selector:
+            text:
+
+    actionable_section:
+      name: Actionable Notifications
+      icon: mdi:gesture-tap-button
       collapsed: true
       input:
-        input_status_bar_icon:
-          name: "🌠 Status Bar Icon"
+        input_action_timeout:
+          name: "⏳ Antwort-Timeout"
           description: >
-            `Android` `optional`
-
-
-            Sets the status bar icon.
-          default: mdi:home-assistant
+            Wartezeit auf eine Antwort-Aktion.
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 60
           selector:
-            icon:
-              placeholder: mdi:home-assistant
+            duration:
 
-        input_notification_color:
-          name: "🎨 Notification Color"
-          description: >
-            `Android` `optional`
-
-
-            Color of the notification.
-          default: [100, 200, 240]
+        # Action 1
+        input_action1_enabled:
+          name: "Aktion 1 aktivieren"
+          default: false
           selector:
-            color_rgb:
-
-        input_channel:
-          name: "📭 Notification Channel"
-          description: >
-            `Android` `optional`
-
-
-            You can set a notification channel. In your companion app you can set e.g. a custom sound for notifications in this channel.
-          default: "General"
-
-        input_group:
-          name: "📑 Notification Group"
-          description: >
-            `Android` `optional`
-
-
-            Group notifications by using this identifier.
-          default: "espn-notification-group"
-
-        input_vibration_pattern:
-          name: "📳 Vibration Pattern"
-          description: >
-            `Android` `optional`
-
-
-            Pattern of the vibration when notification arrives."
-          default: "100, 100"
-
-        input_led_color:
-          name: "💡 Notification LED Color"
-          description: >
-            `Android` `optional`
-
-
-            Color of the phone LED after incoming notification."
-          default: [100, 200, 240]
+            boolean:
+        input_action1_title:
+          name: "Titel Aktion 1"
+          default: "Aktion 1"
           selector:
-            color_rgb:
+            text:
+        input_action1_type:
+          name: "Typ Aktion 1"
+          default: "uri"
+          selector:
+            select:
+              options:
+                - uri
+                - ha_action
+        input_action1_uri:
+          name: "URI Aktion 1 (falls Typ=uri)"
+          default: ""
+          selector:
+            text:
+        input_action1_destructive:
+          name: "Destructive (Aktion 1)"
+          default: false
+          selector:
+            boolean:
+        input_action1_ha_action:
+          name: "HA-Aktion bei Antwort (Aktion 1, falls Typ=ha_action)"
+          default: []
+          selector:
+            action: {}
+
+        # Action 2
+        input_action2_enabled:
+          name: "Aktion 2 aktivieren"
+          default: false
+          selector:
+            boolean:
+        input_action2_title:
+          name: "Titel Aktion 2"
+          default: "Aktion 2"
+          selector:
+            text:
+        input_action2_type:
+          name: "Typ Aktion 2"
+          default: "uri"
+          selector:
+            select:
+              options:
+                - uri
+                - ha_action
+        input_action2_uri:
+          name: "URI Aktion 2 (falls Typ=uri)"
+          default: ""
+          selector:
+            text:
+        input_action2_destructive:
+          name: "Destructive (Aktion 2)"
+          default: false
+          selector:
+            boolean:
+        input_action2_ha_action:
+          name: "HA-Aktion bei Antwort (Aktion 2, falls Typ=ha_action)"
+          default: []
+          selector:
+            action: {}
+
+        # Action 3
+        input_action3_enabled:
+          name: "Aktion 3 aktivieren"
+          default: false
+          selector:
+            boolean:
+        input_action3_title:
+          name: "Titel Aktion 3"
+          default: "Aktion 3"
+          selector:
+            text:
+        input_action3_type:
+          name: "Typ Aktion 3"
+          default: "uri"
+          selector:
+            select:
+              options:
+                - uri
+                - ha_action
+        input_action3_uri:
+          name: "URI Aktion 3 (falls Typ=uri)"
+          default: ""
+          selector:
+            text:
+        input_action3_destructive:
+          name: "Destructive (Aktion 3)"
+          default: false
+          selector:
+            boolean:
+        input_action3_ha_action:
+          name: "HA-Aktion bei Antwort (Aktion 3, falls Typ=ha_action)"
+          default: []
+          selector:
+            action: {}
 
     peridodic_notification_section:
-      name: Periodic Notification Settings
+      name: Periodische Benachrichtigungen
       icon: mdi:refresh
       collapsed: true
       input:
         input_period:
-          name: "🔄 Periodical Notification"
+          name: "🔄 Wiederholung"
           description: >
-            `periodical` `notification`
-
-
-            Sends notification periodically. 0 means off.
+            Sendet periodisch Benachrichtigungen (0 = aus).
           default:
             hours: 0
             minutes: 0
@@ -316,48 +330,36 @@ blueprint:
             duration:
 
         input_stop_button_text:
-          name: "💬 Stop Button Text"
+          name: "💬 Stopp-Button-Text"
           description: >
-            `periodical` `optional`
-
-
-            Text for stop button in the notification to interrupt the periodical send notifications.
+            Text für den Button, der die Wiederholung stoppt.
           default: "Stop notifying"
 
     custom_section:
-      name: Custom Actions / Conditions
+      name: Eigene Aktionen / Bedingungen
       icon: mdi:cog
       collapsed: true
       input:
         input_custom_condition:
-          name: "❌ Conditions"
+          name: "❌ Bedingungen"
           description: >
-            `optional`
-
-
-            Condition that must be met for the notification to be triggered.
+            Bedingungen, die erfüllt sein müssen.
           default: []
           selector:
             condition:
 
         input_custom_action_on:
-          name: "🎬 Custom Action On"
+          name: "🎬 Eigene Aktion bei Eintritt"
           description: >
-            `optional`
-
-
-            Custom action when your observed entity enters the target states.
+            Wird ausgeführt, wenn die Entität den Zielzustand erreicht.
           default: []
           selector:
             action: {}
 
         input_custom_action_off:
-          name: "🎬 Custom Action Off"
+          name: "🎬 Eigene Aktion bei Verlassen"
           description: >
-            `optional`
-
-
-            Custom action when observed entity leave the target state. Keep in mind this action also will be fired if your custom condition doesn't match.
+            Wird ausgeführt, wenn die Entität den Zielzustand verlässt.
           default: []
           selector:
             action: {}
@@ -406,19 +408,45 @@ trigger:
       automation: "{{ this.entity_id }}"
 
 variables:
-  # variables
+  # Inputs
   input_numeric_entity_operator: !input input_numeric_entity_operator
   input_numeric_entity_state: !input input_numeric_entity_state
   input_period: !input input_period
   input_notify_devices: !input input_notify_devices
   input_notify_groups: !input input_notify_groups
-  input_notification_color: !input input_notification_color
-  input_led_color: !input input_led_color
   input_stop_button_text: !input input_stop_button_text
   input_entity_states: !input input_entity_states
   input_notification_auto_delete: !input input_notification_auto_delete
+  input_interruption_level: !input input_interruption_level
+  input_ios_sound: !input input_ios_sound
+  input_group_text: !input input_group_text
+  input_custom_tag: !input input_custom_tag
 
-  # helper
+  # Actionable inputs
+  input_action_timeout: !input input_action_timeout
+
+  a1_enabled: !input input_action1_enabled
+  a1_title: !input input_action1_title
+  a1_type: !input input_action1_type
+  a1_uri: !input input_action1_uri
+  a1_destructive: !input input_action1_destructive
+  a1_ha_action: !input input_action1_ha_action
+
+  a2_enabled: !input input_action2_enabled
+  a2_title: !input input_action2_title
+  a2_type: !input input_action2_type
+  a2_uri: !input input_action2_uri
+  a2_destructive: !input input_action2_destructive
+  a2_ha_action: !input input_action2_ha_action
+
+  a3_enabled: !input input_action3_enabled
+  a3_title: !input input_action3_title
+  a3_type: !input input_action3_type
+  a3_uri: !input input_action3_uri
+  a3_destructive: !input input_action3_destructive
+  a3_ha_action: !input input_action3_ha_action
+
+  # Helper
   is_period_trigger: "{{ trigger.id == 'period' }}"
   now_ts: "{{ now() }}"
   is_perodical: "{{ as_datetime(now_ts) != as_datetime(now_ts) + timedelta(**input_period) }}"
@@ -428,19 +456,46 @@ variables:
     {% else %}
       {{ trigger.entity_id }}
     {% endif %}
-
   entity_name: "{{ state_attr(entity, 'friendly_name') }}"
 
   action_tag: "STOP_{{ this.entity_id }}_{{ entity }}"
-  tag: "{{ this.entity_id.split('.')[1] + entity.split('.')[1] }}"
-  notification_color_hex: "#{{ '%02x%02x%02x' | format(input_notification_color[0], input_notification_color[1], input_notification_color[2]) }}"
-  led_color_hex: "#{{ '%02x%02x%02x' | format(input_led_color[0], input_led_color[1], input_led_color[2]) }}"
-  action: >
-    {% if is_perodical %}
-      {{ [{'action': action_tag, 'title': input_stop_button_text}] }}
+  default_tag: "{{ this.entity_id.split('.')[1] + entity.split('.')[1] }}"
+  tag: >
+    {% set t = (input_custom_tag | string) %}
+    {% if t|length > 0 %}
+      {{ t }}
     {% else %}
-      {{ [] }}
+      {{ default_tag }}
     {% endif %}
+
+  # Actionable buttons array
+  action_buttons: >
+    {% set acts = [] %}
+    {% if a1_enabled %}
+      {% if a1_type == 'uri' %}
+        {% set acts = acts + [ {'action':'URI_1','title':a1_title,'uri':a1_uri,'destructive': a1_destructive} ] %}
+      {% else %}
+        {% set acts = acts + [ {'action':'ACT_1','title':a1_title,'destructive': a1_destructive} ] %}
+      {% endif %}
+    {% endif %}
+    {% if a2_enabled %}
+      {% if a2_type == 'uri' %}
+        {% set acts = acts + [ {'action':'URI_2','title':a2_title,'uri':a2_uri,'destructive': a2_destructive} ] %}
+      {% else %}
+        {% set acts = acts + [ {'action':'ACT_2','title':a2_title,'destructive': a2_destructive} ] %}
+      {% endif %}
+    {% endif %}
+    {% if a3_enabled %}
+      {% if a3_type == 'uri' %}
+        {% set acts = acts + [ {'action':'URI_3','title':a3_title,'uri':a3_uri,'destructive': a3_destructive} ] %}
+      {% else %}
+        {% set acts = acts + [ {'action':'ACT_3','title':a3_title,'destructive': a3_destructive} ] %}
+      {% endif %}
+    {% endif %}
+    {% if is_perodical %}
+      {% set acts = acts + [ {'action': action_tag, 'title': input_stop_button_text} ] %}
+    {% endif %}
+    {{ acts }}
 
   # state evaluation
   new_state: >
@@ -449,7 +504,6 @@ variables:
     {% else %}
       {{ trigger.to_state.state }}
     {% endif %}
-
   old_state: >
     {% if is_period_trigger %}
       {{ trigger.event.data.last_state }}
@@ -459,7 +513,6 @@ variables:
 
   # devices
   notify_devices: "{{ input_notify_devices | map('device_attr', 'name') | list }}"
-
   notify: >
     {% set result = namespace(r=[]) %}
     {% for device in notify_devices %}
@@ -468,7 +521,6 @@ variables:
     {% for group in input_notify_groups %}
       {% set result.r = result.r + ['notify.' + group] %}
     {% endfor %}
-
     {{ result.r }}
 
   # trigger evaluation
@@ -496,7 +548,7 @@ action:
       - condition: template
         value_template: "{{ create_notifictaion }}"
     then:
-      # Notify
+      # HA-Frontend-Notification
       - if:
           - condition: template
             value_template: !input input_ha_notification
@@ -507,6 +559,7 @@ action:
               message: !input input_message
               notification_id: "{{ tag }}"
 
+      # Eigene Eintrittsaktion
       - variables:
           custom_action_on: !input input_custom_action_on
       - if:
@@ -516,35 +569,34 @@ action:
           - choose: []
             default: !input input_custom_action_on
 
+      # Mobile/Gruppen-Benachrichtigung(en)
       - repeat:
           count: "{{ notify | count | int }}"
           sequence:
             - variables:
                 index: "{{ repeat.index-1 }}"
-                notify_device: "{{ notify[index] }}"
-            - action: "{{ notify_device }}"
+                notify_target: "{{ notify[index] }}"
+            - action: "{{ notify_target }}"
               data:
                 title: !input input_title
                 message: !input input_message
                 data:
                   ttl: 0
                   priority: high
-                  notification_icon: !input "input_status_bar_icon"
                   tag: "{{ tag }}"
                   persistent: !input input_persistent_notification
                   sticky: !input input_persistent_notification
-                  channel: !input input_channel
-                  group: !input input_group
-                  color: "{{ notification_color_hex }}"
-                  vibrationPattern: !input input_vibration_pattern
-                  ledColor: "{{ led_color_hex }}"
-                  actions: "{{ action }}"
+                  group: !input input_group_text
+                  push:
+                    interruption-level: !input input_interruption_level
+                    sound: !input input_ios_sound
+                  actions: "{{ action_buttons }}"
 
+      # Periodische Wiederholung
       - if:
           - condition: template
             value_template: "{{ is_perodical }}"
         then:
-          # period logic
           - wait_for_trigger:
               - trigger: event
                 event_type: mobile_app_notification_action
@@ -579,8 +631,42 @@ action:
                   automation: "{{ this.entity_id }}"
                   last_state: "{{ latest_state }}"
                   trigger_id: "{{ latest_trigger_id }}"
+
+      # Actionable: auf Antwort warten und HA-Aktionen ausführen
+      - wait_for_trigger:
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              tag: "{{ tag }}"
+        timeout: !input input_action_timeout
+
+      - choose:
+          # Aktion 1 gedrückt?
+          - conditions:
+              - condition: template
+                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_1'] }}"
+              - condition: template
+                value_template: "{{ a1_enabled and a1_type == 'ha_action' }}"
+            sequence: !input input_action1_ha_action
+
+          # Aktion 2 gedrückt?
+          - conditions:
+              - condition: template
+                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_2'] }}"
+              - condition: template
+                value_template: "{{ a2_enabled and a2_type == 'ha_action' }}"
+            sequence: !input input_action2_ha_action
+
+          # Aktion 3 gedrückt?
+          - conditions:
+              - condition: template
+                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_3'] }}"
+              - condition: template
+                value_template: "{{ a3_enabled and a3_type == 'ha_action' }}"
+            sequence: !input input_action3_ha_action
+
     else:
-      # Delete Notifications
+      # Benachrichtigungen löschen
       - action: notify.notify
         data:
           data:
