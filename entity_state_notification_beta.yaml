@@ -1,5 +1,5 @@
 blueprint:
-  name: "💬 Zustandsbenachrichtigung (Blueprint v1.0)"
+  name: "💬 Zustandsbenachrichtigung (Blueprint v1.1_beta)"
   description: >
     Benachrichtigt dich, wenn ausgewählte Entitäten einen Zielzustand erreichen
     (oder numerisch darüber/darunter liegen). Optional periodische Wiederholung,
