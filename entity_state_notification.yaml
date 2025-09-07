@@ -1,5 +1,5 @@
 blueprint:
-  name: "💬 Zustandsbenachrichtigung (Blueprint v1.0)"
+  name: "💬 Zustandsbenachrichtigung (Blueprint v1.1)"
   description: >
     Benachrichtigt dich, wenn ausgewählte Entitäten einen Zielzustand erreichen
     (oder numerisch darüber/darunter liegen). Optional periodische Wiederholung,
@@ -21,7 +21,6 @@ blueprint:
           selector:
             entity:
               multiple: true
-
         input_entity_states:
           name: "🟢 Zielzustände"
           description: >
@@ -30,7 +29,6 @@ blueprint:
           selector:
             text:
               multiple: true
-
         input_entity_state_duration:
           name: "⏲️ Verweilzeit im Zielzustand"
           description: >
@@ -41,6 +39,30 @@ blueprint:
             seconds: 2
           selector:
             duration:
+
+    state_multi_section:
+      name: Mehrere Zustände (indexbasiert)
+      icon: mdi:format-list-bulleted
+      collapsed: true
+      input:
+        ms_entities:
+          name: "🖲️ Entitäten (Mehrfach)"
+          description: >
+            Liste der zu überwachenden Entitäten. Die Position entspricht den
+            Zielzuständen in der nächsten Liste.
+          default: []
+          selector:
+            entity:
+              multiple: true
+        ms_target_states:
+          name: "🟢 Zielzustände je Entität"
+          description: >
+            Für jede Entität ein Eintrag. Mehrere Zustände pro Eintrag mit | oder , trennen
+            (z. B. "on|open", "home,available").
+          default: []
+          selector:
+            text:
+              multiple: true
 
     numeric_entity_section:
       name: Numerischer Vergleich (über/unter)
@@ -55,7 +77,6 @@ blueprint:
           selector:
             entity:
               multiple: true
-
         input_numeric_entity_operator:
           name: "🔃 Operator"
           description: >
@@ -68,7 +89,6 @@ blueprint:
                   value: "above"
                 - label: "◀️ unter"
                   value: "below"
-
         input_numeric_entity_state:
           name: "🟢 Zielwert"
           description: >
@@ -78,7 +98,6 @@ blueprint:
             number:
               max: 9999999999
               min: -9999999999
-
         input_numeric_entity_state_duration:
           name: "⏲️ Verweilzeit im Zielzustand"
           description: >
@@ -89,6 +108,41 @@ blueprint:
             seconds: 2
           selector:
             duration:
+
+    numeric_multi_section:
+      name: Mehrere numerische Vergleiche (indexbasiert)
+      icon: mdi:view-list
+      collapsed: true
+      input:
+        nm_entities:
+          name: "🖲️ Numerische Entitäten (Mehrfach)"
+          description: >
+            Liste der zu überwachenden numerischen Entitäten. Die Position
+            entspricht dem passenden Operator/Grenzwert unten.
+          default: []
+          selector:
+            entity:
+              multiple: true
+        nm_operators:
+          name: "🔃 Operatoren je Entität"
+          description: >
+            Operator für jede Entität (gleiche Reihenfolge wie oben).
+          default: []
+          selector:
+            select:
+              multiple: true
+              options:
+                - above
+                - below
+        # FIX: number.multiple ist nicht erlaubt -> Textliste verwenden
+        nm_values:
+          name: "🟢 Grenzwerte je Entität"
+          description: >
+            Grenzwert pro Entität (gleiche Reihenfolge wie oben). Zahlen eingeben.
+          default: []
+          selector:
+            text:
+              multiple: true
 
     notifcation_section:
       name: Benachrichtigung
@@ -105,7 +159,6 @@ blueprint:
               multiple: true
               filter:
                 integration: mobile_app
-
         input_notify_groups:
           name: "🫂 Benachrichtigungsgruppen"
           description: >
@@ -114,19 +167,16 @@ blueprint:
           selector:
             text:
               multiple: true
-
         input_title:
           name: "📕 Titel"
           description: >
             Titel der Benachrichtigung.
           default: "{{ entity_name }} ist {{ new_state }}"
-
         input_message:
           name: "💬 Nachricht"
           description: >
             Text der Benachrichtigung.
           default: "Hinweis: {{ entity_name }} ist {{ new_state }}"
-
         input_persistent_notification:
           name: "🪨 Persistente Benachrichtigung"
           description: >
@@ -135,7 +185,6 @@ blueprint:
           default: false
           selector:
             boolean:
-
         input_notification_auto_delete:
           name: "❌ Auto-Schließen"
           description: >
@@ -144,16 +193,13 @@ blueprint:
           default: true
           selector:
             boolean:
-
         input_ha_notification:
           name: "🏠 HA-Benachrichtigung (Frontend)"
           description: >
-            Erstellt zusätzlich eine Persistente Benachrichtigung im HA-Frontend.
+            Erstellt zusätzlich eine persistente Benachrichtigung im HA-Frontend.
           default: false
           selector:
             boolean:
-
-        # Neue Felder
         input_interruption_level:
           name: "⛔ Interruption Level (iOS)"
           description: >
@@ -166,7 +212,6 @@ blueprint:
                 - active
                 - time-sensitive
                 - critical
-
         input_custom_tag:
           name: "🏷️ Tag"
           description: >
@@ -175,7 +220,6 @@ blueprint:
           default: ""
           selector:
             text:
-
         input_ios_sound:
           name: "🔊 iOS Sound"
           description: >
@@ -183,7 +227,6 @@ blueprint:
           default: "default"
           selector:
             text:
-
         input_group_text:
           name: "📑 Group"
           description: >
@@ -207,8 +250,6 @@ blueprint:
             seconds: 60
           selector:
             duration:
-
-        # Action 1
         input_action1_enabled:
           name: "Aktion 1 aktivieren"
           default: false
@@ -242,8 +283,6 @@ blueprint:
           default: []
           selector:
             action: {}
-
-        # Action 2
         input_action2_enabled:
           name: "Aktion 2 aktivieren"
           default: false
@@ -277,8 +316,6 @@ blueprint:
           default: []
           selector:
             action: {}
-
-        # Action 3
         input_action3_enabled:
           name: "Aktion 3 aktivieren"
           default: false
@@ -328,7 +365,6 @@ blueprint:
             seconds: 0
           selector:
             duration:
-
         input_stop_button_text:
           name: "💬 Stopp-Button-Text"
           description: >
@@ -347,7 +383,6 @@ blueprint:
           default: []
           selector:
             condition:
-
         input_custom_action_on:
           name: "🎬 Eigene Aktion bei Eintritt"
           description: >
@@ -355,7 +390,6 @@ blueprint:
           default: []
           selector:
             action: {}
-
         input_custom_action_off:
           name: "🎬 Eigene Aktion bei Verlassen"
           description: >
@@ -373,33 +407,45 @@ trigger:
     entity_id: !input input_entities
     to: !input input_entity_states
     for: !input input_entity_state_duration
-
   - id: "state_off"
     trigger: state
     entity_id: !input input_entities
     not_to: !input input_entity_states
+
+  - id: "ms_on"
+    trigger: state
+    entity_id: !input ms_entities
+    for: !input input_entity_state_duration
+  - id: "ms_off"
+    trigger: state
+    entity_id: !input ms_entities
 
   - id: "above"
     trigger: numeric_state
     entity_id: !input input_numeric_entities
     above: !input input_numeric_entity_state
     for: !input input_numeric_entity_state_duration
-
   - id: "below"
     trigger: numeric_state
     entity_id: !input input_numeric_entities
     below: !input input_numeric_entity_state
     for: !input input_numeric_entity_state_duration
-
   - id: "above_off"
     trigger: numeric_state
     entity_id: !input input_numeric_entities
     above: !input input_numeric_entity_state
-
   - id: "below_off"
     trigger: numeric_state
     entity_id: !input input_numeric_entities
     below: !input input_numeric_entity_state
+
+  - id: "num_multi_on"
+    trigger: state
+    entity_id: !input nm_entities
+    for: !input input_numeric_entity_state_duration
+  - id: "num_multi_off"
+    trigger: state
+    entity_id: !input nm_entities
 
   - id: "period"
     trigger: event
@@ -408,7 +454,6 @@ trigger:
       automation: "{{ this.entity_id }}"
 
 variables:
-  # Inputs
   input_numeric_entity_operator: !input input_numeric_entity_operator
   input_numeric_entity_state: !input input_numeric_entity_state
   input_period: !input input_period
@@ -422,7 +467,6 @@ variables:
   input_group_text: !input input_group_text
   input_custom_tag: !input input_custom_tag
 
-  # Actionable inputs
   input_action_timeout: !input input_action_timeout
 
   a1_enabled: !input input_action1_enabled
@@ -431,14 +475,12 @@ variables:
   a1_uri: !input input_action1_uri
   a1_destructive: !input input_action1_destructive
   a1_ha_action: !input input_action1_ha_action
-
   a2_enabled: !input input_action2_enabled
   a2_title: !input input_action2_title
   a2_type: !input input_action2_type
   a2_uri: !input input_action2_uri
   a2_destructive: !input input_action2_destructive
   a2_ha_action: !input input_action2_ha_action
-
   a3_enabled: !input input_action3_enabled
   a3_title: !input input_action3_title
   a3_type: !input input_action3_type
@@ -446,7 +488,13 @@ variables:
   a3_destructive: !input input_action3_destructive
   a3_ha_action: !input input_action3_ha_action
 
-  # Helper
+  ms_entities: !input ms_entities
+  ms_target_states: !input ms_target_states
+
+  nm_entities: !input nm_entities
+  nm_operators: !input nm_operators
+  nm_values: !input nm_values
+
   is_period_trigger: "{{ trigger.id == 'period' }}"
   now_ts: "{{ now() }}"
   is_perodical: "{{ as_datetime(now_ts) != as_datetime(now_ts) + timedelta(**input_period) }}"
@@ -468,7 +516,6 @@ variables:
       {{ default_tag }}
     {% endif %}
 
-  # Actionable buttons array
   action_buttons: >
     {% set acts = [] %}
     {% if a1_enabled %}
@@ -497,7 +544,6 @@ variables:
     {% endif %}
     {{ acts }}
 
-  # state evaluation
   new_state: >
     {% if is_period_trigger %}
       {{ states(entity) }}
@@ -511,7 +557,6 @@ variables:
       {{ trigger.from_state.state }}
     {% endif %}
 
-  # devices
   notify_devices: "{{ input_notify_devices | map('device_attr', 'name') | list }}"
   notify: >
     {% set result = namespace(r=[]) %}
@@ -523,19 +568,64 @@ variables:
     {% endfor %}
     {{ result.r }}
 
-  # trigger evaluation
+  ms_index: >
+    {% set lst = ms_entities | list %}
+    {% if entity in lst %}{{ lst.index(entity) }}{% else %}-1{% endif %}
+  ms_states_for_entity: >
+    {% set states_list = ms_target_states | list %}
+    {% if ms_index >= 0 and ms_index < states_list|length %}
+      {% set raw = (states_list[ms_index] | string) %}
+      {{ (raw | replace(',', '|') | lower).split('|') | map('trim') | list }}
+    {% else %}
+      {{ [] }}
+    {% endif %}
+
+  nm_index: >
+    {% set lst = nm_entities | list %}
+    {% if entity in lst %}{{ lst.index(entity) }}{% else %}-1{% endif %}
+  nm_op_for_entity: >
+    {% set ops = nm_operators | list %}
+    {% if nm_index >= 0 and nm_index < ops|length %}
+      {{ ops[nm_index] }}
+    {% else %}
+      {{ 'above' }}
+    {% endif %}
+  nm_val_for_entity: >
+    {% set vals = nm_values | list %}
+    {% if nm_index >= 0 and nm_index < vals|length %}
+      {{ (vals[nm_index] | float(0)) }}
+    {% else %}
+      {{ 0 }}
+    {% endif %}
+
   create_notifictaion: >
-    {{ 
-      trigger.id in ['state_on','period'] or 
-      (trigger.id in ['above'] and input_numeric_entity_operator == 'above') or
-      (trigger.id in ['below'] and input_numeric_entity_operator == 'below')
+    {{
+      trigger.id in ['state_on','period']
+      or (trigger.id in ['above'] and input_numeric_entity_operator == 'above')
+      or (trigger.id in ['below'] and input_numeric_entity_operator == 'below')
+      or (
+        trigger.id == 'num_multi_on' and (
+          (nm_op_for_entity == 'above' and (new_state | float(0)) > (nm_val_for_entity | float(0)))
+          or
+          (nm_op_for_entity == 'below' and (new_state | float(0)) < (nm_val_for_entity | float(0)))
+        )
+      )
+      or (
+        trigger.id == 'ms_on'
+        and (new_state | lower) in ms_states_for_entity
+      )
     }}
 
 condition:
   - condition: or
     conditions:
       - condition: template
-        value_template: "{{ not create_notifictaion and input_notification_auto_delete }}"
+        value_template: >
+          {{
+            (not create_notifictaion and input_notification_auto_delete)
+            or
+            (trigger.id in ['state_off','above_off','below_off','num_multi_off','ms_off'] and input_notification_auto_delete)
+          }}
       - condition: and
         conditions:
           - condition: and
@@ -548,7 +638,6 @@ action:
       - condition: template
         value_template: "{{ create_notifictaion }}"
     then:
-      # HA-Frontend-Notification
       - if:
           - condition: template
             value_template: !input input_ha_notification
@@ -559,7 +648,6 @@ action:
               message: !input input_message
               notification_id: "{{ tag }}"
 
-      # Eigene Eintrittsaktion
       - variables:
           custom_action_on: !input input_custom_action_on
       - if:
@@ -569,7 +657,6 @@ action:
           - choose: []
             default: !input input_custom_action_on
 
-      # Mobile/Gruppen-Benachrichtigung(en)
       - repeat:
           count: "{{ notify | count | int }}"
           sequence:
@@ -592,7 +679,6 @@ action:
                     sound: !input input_ios_sound
                   actions: "{{ action_buttons }}"
 
-      # Periodische Wiederholung
       - if:
           - condition: template
             value_template: "{{ is_perodical }}"
@@ -618,6 +704,11 @@ action:
                   {{ latest_state | float > input_numeric_entity_state | float }}
                 {% elif latest_trigger_id == 'below' %}
                   {{ latest_state | float < input_numeric_entity_state | float }}
+                {% elif latest_trigger_id == 'ms_on' %}
+                  {{ (latest_state | lower) in ms_states_for_entity }}
+                {% elif latest_trigger_id == 'num_multi_on' %}
+                  {{ (latest_state | float(0)) > (nm_val_for_entity | float(0)) if nm_op_for_entity == 'above'
+                     else (latest_state | float(0)) < (nm_val_for_entity | float(0)) }}
                 {% endif %}
           - if:
               - condition: template
@@ -632,7 +723,6 @@ action:
                   last_state: "{{ latest_state }}"
                   trigger_id: "{{ latest_trigger_id }}"
 
-      # Actionable: auf Antwort warten und HA-Aktionen ausführen
       - wait_for_trigger:
           - trigger: event
             event_type: mobile_app_notification_action
@@ -641,23 +731,18 @@ action:
         timeout: !input input_action_timeout
 
       - choose:
-          # Aktion 1 gedrückt?
           - conditions:
               - condition: template
                 value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_1'] }}"
               - condition: template
                 value_template: "{{ a1_enabled and a1_type == 'ha_action' }}"
             sequence: !input input_action1_ha_action
-
-          # Aktion 2 gedrückt?
           - conditions:
               - condition: template
                 value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_2'] }}"
               - condition: template
                 value_template: "{{ a2_enabled and a2_type == 'ha_action' }}"
             sequence: !input input_action2_ha_action
-
-          # Aktion 3 gedrückt?
           - conditions:
               - condition: template
                 value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_3'] }}"
@@ -666,7 +751,6 @@ action:
             sequence: !input input_action3_ha_action
 
     else:
-      # Benachrichtigungen löschen
       - action: notify.notify
         data:
           data:
