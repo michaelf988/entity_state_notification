@@ -1,9 +1,9 @@
 blueprint:
-  name: "💬 Zustandsbenachrichtigung (Blueprint v1.4)"
+  name: "💬 Zustandsbenachrichtigung (Blueprint v1.5)"
   description: >
     Benachrichtigt dich, wenn ausgewählte Entitäten einen Zielzustand erreichen
     (oder numerisch darüber/darunter liegen). Optional periodische Wiederholung,
-    Aktionen und Bedingungen.
+    Aktionen und Bedingungen. Unterstützt globale Listener für Notification-Aktionen.
   source_url: https://github.com/michaelf988/entity_state_notification/blob/main/entity_state_notification.yaml
   domain: automation
 
@@ -42,7 +42,6 @@ blueprint:
           selector:
             duration:
 
-    # Mehrere "normale" Zustände (indexbasiert)
     state_multi_section:
       name: Mehrere Zustände (indexbasiert)
       icon: mdi:format-list-bulleted
@@ -68,7 +67,6 @@ blueprint:
             text:
               multiple: true
 
-    # Mehrere numerische Vergleiche (indexbasiert, Operator im Feld)
     numeric_multi_section:
       name: Mehrere numerische Vergleiche (indexbasiert)
       icon: mdi:view-list
@@ -169,7 +167,6 @@ blueprint:
           selector:
             boolean:
 
-        # iOS / allgemeine Felder
         input_interruption_level:
           name: "⛔ Interruption Level (iOS)"
           description: >
@@ -186,8 +183,7 @@ blueprint:
         input_custom_tag:
           name: "🏷️ Tag"
           description: >
-            Tag für die Benachrichtigung (zur späteren Identifikation).
-            Leer lassen, um einen Tag automatisch zu generieren.
+            Eindeutiger Tag für die Benachrichtigung (für globalen Listener empfohlen).
           default: ""
           selector:
             text:
@@ -225,9 +221,9 @@ blueprint:
       collapsed: true
       input:
         input_action_timeout:
-          name: "⏳ Antwort-Timeout"
+          name: "⏳ Antwort-Timeout (nur Inline-Warten)"
           description: >
-            Wartezeit auf eine Antwort-Aktion.
+            Nur relevant, wenn du zusätzlich zum globalen Listener noch das Inline-Warten verwenden willst.
           default:
             hours: 0
             minutes: 0
@@ -362,6 +358,14 @@ blueprint:
             Text für den Button, der die Wiederholung stoppt.
           default: "Benachrichtigungen anhalten"
 
+        input_stop_turn_off_automation:
+          name: "Automation bei Stopp deaktivieren"
+          description: >
+            Wenn aktiviert, wird die Automation bei Stopp-Klick sofort ausgeschaltet (wirkt immer, unabhängig von Wartefenstern).
+          default: false
+          selector:
+            boolean:
+
     custom_section:
       name: Eigene Aktionen / Bedingungen
       icon: mdi:cog
@@ -417,7 +421,7 @@ trigger:
     trigger: state
     entity_id: !input ms_entities
 
-  # Multi-Numeric via Index (State-Trigger; Prüfung im Template + wait_template)
+  # Multi-Numeric (State-Trigger; Prüfung via Template + wait_template)
   - id: "num_multi_on"
     trigger: state
     entity_id: !input nm_entities
@@ -433,12 +437,18 @@ trigger:
     event_data:
       automation: "{{ this.entity_id }}"
 
+  # NEU: Globaler Listener auf alle Notification-Action-Events
+  - id: "action_event"
+    trigger: event
+    event_type: mobile_app_notification_action
+
 variables:
   # Inputs / Benachrichtigung
   input_period: !input input_period
   input_notify_devices: !input input_notify_devices
   input_notify_groups: !input input_notify_groups
   input_stop_button_text: !input input_stop_button_text
+  input_stop_turn_off_automation: !input input_stop_turn_off_automation
   input_entity_states: !input input_entity_states
   input_notification_auto_delete: !input input_notification_auto_delete
   input_interruption_level: !input input_interruption_level
@@ -472,7 +482,7 @@ variables:
   ms_entities: !input ms_entities
   ms_target_states: !input ms_target_states
 
-  # Multi-Numeric Listen (Operator im Schwellwert)
+  # Multi-Numeric Listen
   nm_entities: !input nm_entities
   nm_thresholds: !input nm_thresholds
   input_numeric_entity_state_duration: !input input_numeric_entity_state_duration
@@ -499,7 +509,11 @@ variables:
       {{ default_tag }}
     {% endif %}
 
-  # Buttons (inkl. Stopp für Periodik)
+  # Daten aus globalem Action-Event (falls vorhanden)
+  event_action: "{{ trigger.event.data.action if trigger is not none and trigger.id == 'action_event' else '' }}"
+  event_tag: "{{ trigger.event.data.tag if trigger is not none and trigger.id == 'action_event' else '' }}"
+
+  # Buttons (inkl. Stopp)
   action_buttons: >
     {% set acts = [] %}
     {% if a1_enabled %}
@@ -567,11 +581,10 @@ variables:
       {{ [] }}
     {% endif %}
 
-  # Multi-Numeric Mapping: Operator + Wert aus nm_thresholds parsen
+  # Multi-Numeric Mapping
   nm_index: >
     {% set lst = nm_entities | list %}
     {% if entity in lst %}{{ lst.index(entity) }}{% else %}-1{% endif %}
-
   nm_op_for_entity: >
     {% set ths = nm_thresholds | list %}
     {% if nm_index >= 0 and nm_index < ths|length %}
@@ -582,12 +595,11 @@ variables:
       {% elif first == '>' %}
         {{ 'above' }}
       {% else %}
-        {{ 'above' }}  {# Fallback: kein Operator angegeben -> 'above' #}
+        {{ 'above' }}
       {% endif %}
     {% else %}
       {{ 'above' }}
     {% endif %}
-
   nm_val_for_entity: >
     {% set ths = nm_thresholds | list %}
     {% if nm_index >= 0 and nm_index < ths|length %}
@@ -599,7 +611,7 @@ variables:
       {{ 0 }}
     {% endif %}
 
-  # Trigger-Bewertung (inkl. Multi-State und Multi-Numeric)
+  # Trigger-Bewertung
   create_notifictaion: >
     {{
       trigger.id in ['state_on','period']
@@ -619,7 +631,6 @@ variables:
 condition:
   - condition: or
     conditions:
-      # Auto-Löschung wenn NICHT mehr erfüllt ODER wenn ein Off-Trigger kommt
       - condition: template
         value_template: >
           {{
@@ -635,187 +646,125 @@ condition:
             value_template: "{{ create_notifictaion }}"
 
 action:
-  - if:
-      - condition: template
-        value_template: "{{ create_notifictaion }}"
-    then:
+  - choose:
 
-      # Nur bei Multi-Numerik: Verweilzeit korrekt prüfen, bevor gesendet wird
-      - if:
+      # 1) Globaler Action-Listener: greift jederzeit
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'action_event' }}"
           - condition: template
             value_template: >
-              {{ trigger.id == 'num_multi_on' and
-                 ( (input_numeric_entity_state_duration.hours|int > 0)
-                   or (input_numeric_entity_state_duration.minutes|int > 0)
-                   or (input_numeric_entity_state_duration.seconds|int > 0) ) }}
-        then:
-          - wait_template: >
-              {% set v = states(entity) | float(0) %}
-              {% if nm_op_for_entity == 'above' %}
-                {{ v > (nm_val_for_entity | float(0)) }}
-              {% else %}
-                {{ v < (nm_val_for_entity | float(0)) }}
-              {% endif %}
-            timeout: !input input_numeric_entity_state_duration
-            continue_on_timeout: false
-
-      # HA-Frontend-Notification (optional)
-      - if:
-          - condition: template
-            value_template: !input input_ha_notification
-        then:
-          - action: persistent_notification.create
-            data:
-              title: !input input_title
-              message: !input input_message
-              notification_id: "{{ tag }}"
-
-      # Eigene Eintrittsaktion
-      - variables:
-          custom_action_on: !input input_custom_action_on
-      - if:
-          - condition: template
-            value_template: "{{ custom_action_on != none }}"
-        then:
-          - choose: []
-            default: !input input_custom_action_on
-
-      # Mobile/Gruppen-Benachrichtigung(en)
-      - repeat:
-          count: "{{ notify | count | int }}"
-          sequence:
-            - variables:
-                index: "{{ repeat.index-1 }}"
-                notify_target: "{{ notify[index] }}"
-            - choose:
-                - conditions:
-                    - condition: template
-                      value_template: "{{ input_interruption_level == 'critical' }}"
-                  sequence:
-                    - action: "{{ notify_target }}"
-                      data:
-                        title: !input input_title
-                        message: !input input_message
-                        data:
-                          ttl: 0
-                          priority: high
-                          tag: "{{ tag }}"
-                          persistent: !input input_persistent_notification
-                          sticky: !input input_persistent_notification
-                          group: !input input_group_text
-                          push:
-                            interruption-level: critical
-                            sound:
-                              name: !input input_ios_sound
-                              critical: 1
-                              volume: !input input_critical_volume
-                          actions: "{{ action_buttons }}"
-              default:
-                - action: "{{ notify_target }}"
-                  data:
-                    title: !input input_title
-                    message: !input input_message
+              {{ (input_custom_tag | string) | length > 0 and event_tag == (input_custom_tag | string) }}
+        sequence:
+          - choose:
+              # Stopp gedrückt?
+              - conditions:
+                  - condition: template
+                    value_template: "{{ event_action == action_tag }}"
+                sequence:
+                  - if:
+                      - condition: template
+                        value_template: "{{ input_stop_turn_off_automation }}"
+                    then:
+                      - action: automation.turn_off
+                        target:
+                          entity_id: "{{ this.entity_id }}"
+                  - action: notify.notify
                     data:
-                      ttl: 0
-                      priority: high
-                      tag: "{{ tag }}"
-                      persistent: !input input_persistent_notification
-                      sticky: !input input_persistent_notification
-                      group: !input input_group_text
-                      push:
-                        interruption-level: !input input_interruption_level
-                        sound: !input input_ios_sound
-                      actions: "{{ action_buttons }}"
+                      data:
+                        tag: "{{ input_custom_tag }}"
+                        ttl: 0
+                        priority: high
+                      message: clear_notification
 
-      # Periodische Wiederholung
-      - if:
+              # ACT_1/2/3 gedrückt? -> HA-Aktionen ausführen (falls konfiguriert)
+              - conditions:
+                  - condition: template
+                    value_template: "{{ event_action == 'ACT_1' and a1_enabled and a1_type == 'ha_action' }}"
+                sequence: !input input_action1_ha_action
+              - conditions:
+                  - condition: template
+                    value_template: "{{ event_action == 'ACT_2' and a2_enabled and a2_type == 'ha_action' }}"
+                sequence: !input input_action2_ha_action
+              - conditions:
+                  - condition: template
+                    value_template: "{{ event_action == 'ACT_3' and a3_enabled and a3_type == 'ha_action' }}"
+                sequence: !input input_action3_ha_action
+          # Ende globaler Action-Listener
+
+      # 2) Normale Logik (Benachrichtigung senden etc.)
+      - conditions:
           - condition: template
-            value_template: "{{ is_perodical }}"
-        then:
-          - wait_for_trigger:
-              - trigger: event
-                event_type: mobile_app_notification_action
-                event_data:
-                  action: "{{ action_tag }}"
-            timeout: !input input_period
-          - variables:
-              latest_state: "{{ states(entity) }}"
-              latest_trigger_id: >
-                {% if is_period_trigger %}
-                  {{ trigger.event.data.trigger_id }}
-                {% else %}
-                  {{ trigger.id }}
-                {% endif %}
-              latest_state_condition: >
-                {% if latest_trigger_id == 'state_on' %}
-                  {{ latest_state in input_entity_states }}
-                {% elif latest_trigger_id == 'ms_on' %}
-                  {{ (latest_state | lower) in ms_states_for_entity }}
-                {% elif latest_trigger_id == 'num_multi_on' %}
-                  {{ (latest_state | float(0)) > (nm_val_for_entity | float(0)) if nm_op_for_entity == 'above'
-                     else (latest_state | float(0)) < (nm_val_for_entity | float(0)) }}
-                {% endif %}
+            value_template: "{{ create_notifictaion }}"
+        sequence:
+
+          # Multi-Numerik: Verweilzeit korrekt prüfen
           - if:
               - condition: template
-                value_template: "{{ latest_state_condition }}"
-              - condition: template
-                value_template: "{{ wait.trigger == none }}"
+                value_template: >
+                  {{ trigger.id == 'num_multi_on' and
+                     ( (input_numeric_entity_state_duration.hours|int > 0)
+                       or (input_numeric_entity_state_duration.minutes|int > 0)
+                       or (input_numeric_entity_state_duration.seconds|int > 0) ) }}
             then:
-              - event: esn_event
-                event_data:
-                  entity: "{{ entity }}"
-                  automation: "{{ this.entity_id }}"
-                  last_state: "{{ latest_state }}"
-                  trigger_id: "{{ latest_trigger_id }}"
+              - wait_template: >
+                  {% set v = states(entity) | float(0) %}
+                  {% if nm_op_for_entity == 'above' %}
+                    {{ v > (nm_val_for_entity | float(0)) }}
+                  {% else %}
+                    {{ v < (nm_val_for_entity | float(0)) }}
+                  {% endif %}
+                timeout: !input input_numeric_entity_state_duration
+                continue_on_timeout: false
 
-      # Actionable: auf Antwort warten und ggf. HA-Aktionen ausführen
-      - wait_for_trigger:
-          - trigger: event
-            event_type: mobile_app_notification_action
-            event_data:
-              tag: "{{ tag }}"
-        timeout: !input input_action_timeout
+          # HA-Frontend-Notification (optional)
+          - if:
+              - condition: template
+                value_template: !input input_ha_notification
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: !input input_title
+                  message: !input input_message
+                  notification_id: "{{ tag }}"
 
-      - choose:
-          - conditions:
+          # Eigene Eintrittsaktion
+          - variables:
+              custom_action_on: !input input_custom_action_on
+          - if:
               - condition: template
-                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_1'] }}"
-              - condition: template
-                value_template: "{{ a1_enabled and a1_type == 'ha_action' }}"
-            sequence: !input input_action1_ha_action
-          - conditions:
-              - condition: template
-                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_2'] }}"
-              - condition: template
-                value_template: "{{ a2_enabled and a2_type == 'ha_action' }}"
-            sequence: !input input_action2_ha_action
-          - conditions:
-              - condition: template
-                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_3'] }}"
-              - condition: template
-                value_template: "{{ a3_enabled and a3_type == 'ha_action' }}"
-            sequence: !input input_action3_ha_action
+                value_template: "{{ custom_action_on != none }}"
+            then:
+              - choose: []
+                default: !input input_custom_action_on
 
-    else:
-      # Benachrichtigungen löschen
-      - action: notify.notify
-        data:
-          data:
-            tag: "{{ tag }}"
-            ttl: 0
-            priority: high
-          message: clear_notification
-      - action: persistent_notification.dismiss
-        data:
-          notification_id: "{{ tag }}"
-      - variables:
-          custom_action_off: !input input_custom_action_off
-      - if:
-          - condition: template
-            value_template: "{{ custom_action_off != none }}"
-        then:
-          - choose: []
-            default: !input input_custom_action_off
-
-mode: parallel
-max: 20
+          # Mobile/Gruppen-Benachrichtigung(en)
+          - repeat:
+              count: "{{ notify | count | int }}"
+              sequence:
+                - variables:
+                    index: "{{ repeat.index-1 }}"
+                    notify_target: "{{ notify[index] }}"
+                - choose:
+                    - conditions:
+                        - condition: template
+                          value_template: "{{ input_interruption_level == 'critical' }}"
+                      sequence:
+                        - action: "{{ notify_target }}"
+                          data:
+                            title: !input input_title
+                            message: !input input_message
+                            data:
+                              ttl: 0
+                              priority: high
+                              tag: "{{ tag }}"
+                              persistent: !input input_persistent_notification
+                              sticky: !input input_persistent_notification
+                              group: !input input_group_text
+                              push:
+                                interruption-level: critical
+                                sound:
+                                  name: !input input_ios_sound
+                                  critical: 1
+                                  volume: !input input_critical_volume
+                              actions:
