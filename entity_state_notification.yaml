@@ -1,5 +1,5 @@
 blueprint:
-  name: "💬 Zustandsbenachrichtigung (Blueprint v1.3)"
+  name: "💬 Zustandsbenachrichtigung (Blueprint v1.4)"
   description: >
     Benachrichtigt dich, wenn ausgewählte Entitäten einen Zielzustand erreichen
     (oder numerisch darüber/darunter liegen). Optional periodische Wiederholung,
@@ -200,6 +200,17 @@ blueprint:
           selector:
             text:
 
+        input_critical_volume:
+          name: "🔊 Kritische Lautstärke (iOS)"
+          description: >
+            Nur bei *Interruption Level* = **critical**. Bereich 0.0–1.0 (0–100 %).
+          default: 1.0
+          selector:
+            number:
+              min: 0
+              max: 1
+              step: 0.05
+
         input_group_text:
           name: "📑 Group"
           description: >
@@ -349,7 +360,7 @@ blueprint:
           name: "💬 Stopp-Button-Text"
           description: >
             Text für den Button, der die Wiederholung stoppt.
-          default: "Stop notifying"
+          default: "Benachrichtigungen anhalten"
 
     custom_section:
       name: Eigene Aktionen / Bedingungen
@@ -432,6 +443,7 @@ variables:
   input_notification_auto_delete: !input input_notification_auto_delete
   input_interruption_level: !input input_interruption_level
   input_ios_sound: !input input_ios_sound
+  input_critical_volume: !input input_critical_volume
   input_group_text: !input input_group_text
   input_custom_tag: !input input_custom_tag
 
@@ -675,21 +687,45 @@ action:
             - variables:
                 index: "{{ repeat.index-1 }}"
                 notify_target: "{{ notify[index] }}"
-            - action: "{{ notify_target }}"
-              data:
-                title: !input input_title
-                message: !input input_message
-                data:
-                  ttl: 0
-                  priority: high
-                  tag: "{{ tag }}"
-                  persistent: !input input_persistent_notification
-                  sticky: !input input_persistent_notification
-                  group: !input input_group_text
-                  push:
-                    interruption-level: !input input_interruption_level
-                    sound: !input input_ios_sound
-                  actions: "{{ action_buttons }}"
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ input_interruption_level == 'critical' }}"
+                  sequence:
+                    - action: "{{ notify_target }}"
+                      data:
+                        title: !input input_title
+                        message: !input input_message
+                        data:
+                          ttl: 0
+                          priority: high
+                          tag: "{{ tag }}"
+                          persistent: !input input_persistent_notification
+                          sticky: !input input_persistent_notification
+                          group: !input input_group_text
+                          push:
+                            interruption-level: critical
+                            sound:
+                              name: !input input_ios_sound
+                              critical: 1
+                              volume: !input input_critical_volume
+                          actions: "{{ action_buttons }}"
+              default:
+                - action: "{{ notify_target }}"
+                  data:
+                    title: !input input_title
+                    message: !input input_message
+                    data:
+                      ttl: 0
+                      priority: high
+                      tag: "{{ tag }}"
+                      persistent: !input input_persistent_notification
+                      sticky: !input input_persistent_notification
+                      group: !input input_group_text
+                      push:
+                        interruption-level: !input input_interruption_level
+                        sound: !input input_ios_sound
+                      actions: "{{ action_buttons }}"
 
       # Periodische Wiederholung
       - if:
