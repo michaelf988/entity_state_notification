@@ -1,5 +1,5 @@
 blueprint:
-  name: "💬 Zustandsbenachrichtigung (Blueprint v1.2)"
+  name: "💬 Zustandsbenachrichtigung (Blueprint v1.3)"
   description: >
     Benachrichtigt dich, wenn ausgewählte Entitäten einen Zielzustand erreichen
     (oder numerisch darüber/darunter liegen). Optional periodische Wiederholung,
@@ -68,54 +68,6 @@ blueprint:
             text:
               multiple: true
 
-    numeric_entity_section:
-      name: Numerischer Vergleich (einfach, über/unter)
-      icon: mdi:code-greater-than
-      collapsed: true
-      input:
-        input_numeric_entities:
-          name: "🖲️ Beobachtete numerische Entitäten"
-          description: >
-            Entitäten, die die Benachrichtigung auslösen.
-          default: []
-          selector:
-            entity:
-              multiple: true
-
-        input_numeric_entity_operator:
-          name: "🔃 Operator"
-          description: >
-            Operator für den Vergleich mit dem Zielwert.
-          default: "above"
-          selector:
-            select:
-              options:
-                - label: "▶️ über"
-                  value: "above"
-                - label: "◀️ unter"
-                  value: "below"
-
-        input_numeric_entity_state:
-          name: "🟢 Zielwert"
-          description: >
-            Wert, der die Automatisierung auslöst.
-          default: 0
-          selector:
-            number:
-              max: 9999999999
-              min: -9999999999
-
-        input_numeric_entity_state_duration:
-          name: "⏲️ Verweilzeit im Zielzustand"
-          description: >
-            Dauer, die die Entität im Zielzustand sein muss.
-          default:
-            hours: 0
-            minutes: 0
-            seconds: 2
-          selector:
-            duration:
-
     # Mehrere numerische Vergleiche (indexbasiert, Operator im Feld)
     numeric_multi_section:
       name: Mehrere numerische Vergleiche (indexbasiert)
@@ -141,6 +93,18 @@ blueprint:
           selector:
             text:
               multiple: true
+
+        input_numeric_entity_state_duration:
+          name: "⏲️ Verweilzeit (Multi-Numerik)"
+          description: >
+            Dauer, die die Bedingung (> oder <) ununterbrochen erfüllt sein muss,
+            bevor benachrichtigt wird. 0 = sofort.
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 2
+          selector:
+            duration:
 
     notifcation_section:
       name: Benachrichtigung
@@ -420,7 +384,7 @@ trigger_variables:
   input_entities: !input input_entities
 
 trigger:
-  # Einzelne Gleichheitsvergleiche
+  # Gleichheitsvergleiche (einfach)
   - id: "state_on"
     trigger: state
     entity_id: !input input_entities
@@ -442,34 +406,10 @@ trigger:
     trigger: state
     entity_id: !input ms_entities
 
-  # Einzelne numerische Vergleiche
-  - id: "above"
-    trigger: numeric_state
-    entity_id: !input input_numeric_entities
-    above: !input input_numeric_entity_state
-    for: !input input_numeric_entity_state_duration
-
-  - id: "below"
-    trigger: numeric_state
-    entity_id: !input input_numeric_entities
-    below: !input input_numeric_entity_state
-    for: !input input_numeric_entity_state_duration
-
-  - id: "above_off"
-    trigger: numeric_state
-    entity_id: !input input_numeric_entities
-    above: !input input_numeric_entity_state
-
-  - id: "below_off"
-    trigger: numeric_state
-    entity_id: !input input_numeric_entities
-    below: !input input_numeric_entity_state
-
-  # Multi-Numeric via Index (State-Trigger; Prüfung im Template)
+  # Multi-Numeric via Index (State-Trigger; Prüfung im Template + wait_template)
   - id: "num_multi_on"
     trigger: state
     entity_id: !input nm_entities
-    for: !input input_numeric_entity_state_duration
 
   - id: "num_multi_off"
     trigger: state
@@ -483,9 +423,7 @@ trigger:
       automation: "{{ this.entity_id }}"
 
 variables:
-  # Inputs
-  input_numeric_entity_operator: !input input_numeric_entity_operator
-  input_numeric_entity_state: !input input_numeric_entity_state
+  # Inputs / Benachrichtigung
   input_period: !input input_period
   input_notify_devices: !input input_notify_devices
   input_notify_groups: !input input_notify_groups
@@ -525,6 +463,7 @@ variables:
   # Multi-Numeric Listen (Operator im Schwellwert)
   nm_entities: !input nm_entities
   nm_thresholds: !input nm_thresholds
+  input_numeric_entity_state_duration: !input input_numeric_entity_state_duration
 
   # Helper
   is_period_trigger: "{{ trigger.id == 'period' }}"
@@ -652,8 +591,6 @@ variables:
   create_notifictaion: >
     {{
       trigger.id in ['state_on','period']
-      or (trigger.id in ['above'] and input_numeric_entity_operator == 'above')
-      or (trigger.id in ['below'] and input_numeric_entity_operator == 'below')
       or (
         trigger.id == 'num_multi_on' and (
           (nm_op_for_entity == 'above' and (new_state | float(0)) > (nm_val_for_entity | float(0)))
@@ -676,7 +613,7 @@ condition:
           {{
             (not create_notifictaion and input_notification_auto_delete)
             or
-            (trigger.id in ['state_off','above_off','below_off','num_multi_off','ms_off'] and input_notification_auto_delete)
+            (trigger.id in ['state_off','num_multi_off','ms_off'] and input_notification_auto_delete)
           }}
       - condition: and
         conditions:
@@ -690,7 +627,27 @@ action:
       - condition: template
         value_template: "{{ create_notifictaion }}"
     then:
-      # HA-Frontend-Notification
+
+      # Nur bei Multi-Numerik: Verweilzeit korrekt prüfen, bevor gesendet wird
+      - if:
+          - condition: template
+            value_template: >
+              {{ trigger.id == 'num_multi_on' and
+                 ( (input_numeric_entity_state_duration.hours|int > 0)
+                   or (input_numeric_entity_state_duration.minutes|int > 0)
+                   or (input_numeric_entity_state_duration.seconds|int > 0) ) }}
+        then:
+          - wait_template: >
+              {% set v = states(entity) | float(0) %}
+              {% if nm_op_for_entity == 'above' %}
+                {{ v > (nm_val_for_entity | float(0)) }}
+              {% else %}
+                {{ v < (nm_val_for_entity | float(0)) }}
+              {% endif %}
+            timeout: !input input_numeric_entity_state_duration
+            continue_on_timeout: false
+
+      # HA-Frontend-Notification (optional)
       - if:
           - condition: template
             value_template: !input input_ha_notification
@@ -756,10 +713,6 @@ action:
               latest_state_condition: >
                 {% if latest_trigger_id == 'state_on' %}
                   {{ latest_state in input_entity_states }}
-                {% elif latest_trigger_id == 'above' %}
-                  {{ latest_state | float > input_numeric_entity_state | float }}
-                {% elif latest_trigger_id == 'below' %}
-                  {{ latest_state | float < input_numeric_entity_state | float }}
                 {% elif latest_trigger_id == 'ms_on' %}
                   {{ (latest_state | lower) in ms_states_for_entity }}
                 {% elif latest_trigger_id == 'num_multi_on' %}
