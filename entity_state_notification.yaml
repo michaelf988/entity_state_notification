@@ -3,9 +3,9 @@ blueprint:
   description: >
     Benachrichtigt dich, wenn ausgewählte Entitäten einen Zielzustand erreichen
     (oder numerisch darüber/darunter liegen). Optional periodische Wiederholung,
-    Aktionen und Bedingungen. Unterstützt globale Listener für Notification-Aktionen.
-    🧩 v1.5.1: Korrektur der Gruppenverarbeitung, iOS-Fallback für non-critical Levels,
-    Auto-Delete (clear_notification) verbessert.
+    Aktionen und Bedingungen.
+    🧩 v1.5.1: Korrektur der Gruppenverarbeitung, Fallback-Push für non-critical iOS-Level,
+    und Auto-Delete über clear_notification.
   source_url: https://github.com/michaelf988/entity_state_notification/blob/main/entity_state_notification.yaml
   domain: automation
 
@@ -17,29 +17,19 @@ blueprint:
       input:
         input_entities:
           name: "🖲️ Beobachtete Entitäten"
-          description: >
-            Entitäten, die die Benachrichtigung auslösen.
           default: []
           selector:
             entity:
               multiple: true
-
         input_entity_states:
           name: "🟢 Zielzustände"
-          description: >
-            Zustände, die die Automatisierung auslösen.
           default: []
           selector:
             text:
               multiple: true
-
         input_entity_state_duration:
           name: "⏲️ Verweilzeit im Zielzustand"
-          description: >
-            Dauer, die die Entität im Zielzustand sein muss.
           default:
-            hours: 0
-            minutes: 0
             seconds: 2
           selector:
             duration:
@@ -51,19 +41,12 @@ blueprint:
       input:
         ms_entities:
           name: "🖲️ Entitäten (Mehrfach)"
-          description: >
-            Liste der zu überwachenden Entitäten. Die Position entspricht den
-            Zielzuständen in der nächsten Liste.
           default: []
           selector:
             entity:
               multiple: true
-
         ms_target_states:
           name: "🟢 Zielzustände je Entität"
-          description: >
-            Für jede Entität ein Eintrag. Mehrere Zustände pro Eintrag mit | oder , trennen
-            (z. B. "on|open", "home,available").
           default: []
           selector:
             text:
@@ -76,32 +59,19 @@ blueprint:
       input:
         nm_entities:
           name: "🖲️ Numerische Entitäten (Mehrfach)"
-          description: >
-            Liste der zu überwachenden numerischen Entitäten. Die Position
-            entspricht dem passenden Schwellwert unten.
           default: []
           selector:
             entity:
               multiple: true
-
         nm_thresholds:
           name: "🟢 Schwellwerte je Entität (mit Operator)"
-          description: >
-            Pro Entität genau ein Eintrag mit Operator **<** oder **>** und Zahl.
-            Beispiele: `>5`, `<1,2`, `> 12.3`. Dezimal-Komma wird unterstützt.
           default: []
           selector:
             text:
               multiple: true
-
         input_numeric_entity_state_duration:
           name: "⏲️ Verweilzeit (Multi-Numerik)"
-          description: >
-            Dauer, die die Bedingung (> oder <) ununterbrochen erfüllt sein muss,
-            bevor benachrichtigt wird. 0 = sofort.
           default:
-            hours: 0
-            minutes: 0
             seconds: 2
           selector:
             duration:
@@ -113,8 +83,6 @@ blueprint:
       input:
         input_notify_devices:
           name: "📱 Gerät(e) benachrichtigen"
-          description: >
-            Geräte/Gruppen, die die Benachrichtigung erhalten.
           default: []
           selector:
             device:
@@ -122,11 +90,11 @@ blueprint:
               filter:
                 integration: mobile_app
 
+        # ✅ FIX 1: nur Gruppenname ohne 'notify.'
         input_notify_groups:
           name: "🫂 Benachrichtigungsgruppen"
           description: >
-            Namen von Notification-Gruppen **ohne 'notify.'** angeben
-            (z. B. `MF_Notify_Group`).
+            Nur Gruppenname angeben, ohne „notify.“ (z. B. `MF_Notify_Group`)
           default: []
           selector:
             text:
@@ -134,46 +102,27 @@ blueprint:
 
         input_title:
           name: "📕 Titel"
-          description: >
-            Titel der Benachrichtigung.
           default: "{{ entity_name }} ist {{ new_state }}"
-
         input_message:
           name: "💬 Nachricht"
-          description: >
-            Text der Benachrichtigung.
           default: "Hinweis: {{ entity_name }} ist {{ new_state }}"
-
         input_persistent_notification:
           name: "🪨 Persistente Benachrichtigung"
-          description: >
-            Kann nicht weggewischt werden; verschwindet erst,
-            wenn die Entität den Zielzustand verlässt.
           default: false
           selector:
             boolean:
-
         input_notification_auto_delete:
           name: "❌ Auto-Schließen"
-          description: >
-            Benachrichtigungen automatisch schließen,
-            wenn die Zielzustands-Bedingung nicht mehr gilt.
           default: true
           selector:
             boolean:
-
         input_ha_notification:
           name: "🏠 HA-Benachrichtigung (Frontend)"
-          description: >
-            Erstellt zusätzlich eine persistente Benachrichtigung im HA-Frontend.
           default: false
           selector:
             boolean:
-
         input_interruption_level:
           name: "⛔ Interruption Level (iOS)"
-          description: >
-            Einstellen, wie „dringlich“ die Benachrichtigung ist.
           default: "active"
           selector:
             select:
@@ -182,38 +131,26 @@ blueprint:
                 - active
                 - time-sensitive
                 - critical
-
         input_custom_tag:
           name: "🏷️ Tag"
-          description: >
-            Eindeutiger Tag für die Benachrichtigung (für globalen Listener empfohlen).
           default: ""
           selector:
             text:
-
         input_ios_sound:
           name: "🔊 iOS Sound"
-          description: >
-            Name des Sounds (z. B. default oder <Soundname>).
           default: "default"
           selector:
             text:
-
         input_critical_volume:
-          name: "🔊 Kritische Lautstärke (iOS)"
-          description: >
-            Nur bei *Interruption Level* = **critical**. Bereich 0.0–1.0 (0–100 %).
+          name: "🔊 Kritische Lautstärke"
           default: 1.0
           selector:
             number:
               min: 0
               max: 1
               step: 0.05
-
         input_group_text:
           name: "📑 Group"
-          description: >
-            Gruppiere Benachrichtigungen über diese Kennung.
           default: ""
           selector:
             text:
@@ -224,7 +161,7 @@ blueprint:
       collapsed: true
       input:
         input_action_timeout:
-          name: "⏳ Antwort-Timeout (nur Inline-Warten)"
+          name: "⏳ Antwort-Timeout"
           default:
             seconds: 60
           selector:
@@ -244,9 +181,7 @@ blueprint:
           default: "uri"
           selector:
             select:
-              options:
-                - uri
-                - ha_action
+              options: ["uri", "ha_action"]
         input_action1_uri:
           name: "URI Aktion 1 (falls Typ=uri)"
           default: ""
@@ -258,10 +193,11 @@ blueprint:
           selector:
             boolean:
         input_action1_ha_action:
-          name: "HA-Aktion bei Antwort (Aktion 1, falls Typ=ha_action)"
+          name: "HA-Aktion bei Antwort (Aktion 1)"
           default: []
           selector:
             action: {}
+        # Aktionen 2 & 3 wie gehabt ...
         input_action2_enabled:
           name: "Aktion 2 aktivieren"
           default: false
@@ -277,11 +213,9 @@ blueprint:
           default: "uri"
           selector:
             select:
-              options:
-                - uri
-                - ha_action
+              options: ["uri", "ha_action"]
         input_action2_uri:
-          name: "URI Aktion 2 (falls Typ=uri)"
+          name: "URI Aktion 2"
           default: ""
           selector:
             text:
@@ -291,7 +225,7 @@ blueprint:
           selector:
             boolean:
         input_action2_ha_action:
-          name: "HA-Aktion bei Antwort (Aktion 2, falls Typ=ha_action)"
+          name: "HA-Aktion bei Antwort (Aktion 2)"
           default: []
           selector:
             action: {}
@@ -310,11 +244,9 @@ blueprint:
           default: "uri"
           selector:
             select:
-              options:
-                - uri
-                - ha_action
+              options: ["uri", "ha_action"]
         input_action3_uri:
-          name: "URI Aktion 3 (falls Typ=uri)"
+          name: "URI Aktion 3"
           default: ""
           selector:
             text:
@@ -324,7 +256,7 @@ blueprint:
           selector:
             boolean:
         input_action3_ha_action:
-          name: "HA-Aktion bei Antwort (Aktion 3, falls Typ=ha_action)"
+          name: "HA-Aktion bei Antwort (Aktion 3)"
           default: []
           selector:
             action: {}
@@ -343,11 +275,6 @@ blueprint:
         input_stop_button_text:
           name: "💬 Stopp-Button-Text"
           default: "Benachrichtigungen anhalten"
-        input_stop_turn_off_automation:
-          name: "Automation bei Stopp deaktivieren"
-          default: false
-          selector:
-            boolean:
 
     custom_section:
       name: Eigene Aktionen / Bedingungen
@@ -401,9 +328,6 @@ trigger:
     event_type: esn_event
     event_data:
       automation: "{{ this.entity_id }}"
-  - id: action_event
-    trigger: event
-    event_type: mobile_app_notification_action
 
 variables:
   input_notify_devices: !input input_notify_devices
@@ -417,6 +341,7 @@ variables:
   input_notification_auto_delete: !input input_notification_auto_delete
   input_title: !input input_title
   input_message: !input input_message
+
   entity: "{{ trigger.entity_id }}"
   entity_name: "{{ state_attr(entity, 'friendly_name') }}"
   new_state: "{{ trigger.to_state.state }}"
@@ -427,7 +352,8 @@ variables:
       {{ this.entity_id.split('.')[1] ~ '_' ~ entity.split('.')[1] }}
     {% endif %}
   notify_devices: "{{ input_notify_devices | map('device_attr', 'name') | list }}"
-  # --- Fix 1: Korrekte Gruppenverarbeitung ---
+
+  # ✅ FIX 1: korrigierte Gruppen-Verarbeitung
   notify: >
     {% set result = namespace(r=[]) %}
     {% for device in notify_devices %}
@@ -451,7 +377,7 @@ condition:
 action:
   - choose:
 
-      # --- Fix 2: Auto-Delete-Zweig ---
+      # ✅ FIX 3: Auto-Delete-Sequenz
       - conditions:
           - condition: template
             value_template: >
@@ -471,7 +397,7 @@ action:
                       ttl: 0
                       priority: high
 
-      # --- Hauptbenachrichtigung mit Fallback ---
+      # Hauptbenachrichtigung
       - conditions:
           - condition: template
             value_template: >
@@ -506,7 +432,7 @@ action:
                                   critical: 1
                                   volume: "{{ input_critical_volume }}"
                               actions: []
-                  # --- Fix 3: Standard-Fallback ---
+                  # ✅ FIX 2: Fallback für non-critical
                   default:
                     - action: "{{ notify_target }}"
                       data:
@@ -517,6 +443,7 @@ action:
                           group: "{{ input_group_text }}"
                           push:
                             interruption-level: "{{ input_interruption_level }}"
+                            sound: "{{ input_ios_sound }}"
                           actions: []
 
 mode: restart
