@@ -1,6 +1,11 @@
 blueprint:
-  name: "💬 Zustandsbenachrichtigung (Blueprint v1.3)"
+  name: "💬 Zustandsbenachrichtigung (Blueprint v1.4)"
   description: >
+    **Changelog v1.4:**
+    - FIX: Actionable Notifications funktionieren nun auch während der periodischen Wartezeit (kein Blockieren mehr).
+    - FIX: Diverse Tippfehler in Variablennamen behoben (create_notification, periodical).
+    - OPT: Timeout-Logik vereinfacht.
+
     Benachrichtigt dich, wenn ausgewählte Entitäten einen Zielzustand erreichen
     (oder numerisch darüber/darunter liegen). Optional periodische Wiederholung,
     Aktionen und Bedingungen.
@@ -106,7 +111,7 @@ blueprint:
           selector:
             duration:
 
-    notifcation_section:
+    notification_section:
       name: Benachrichtigung
       icon: mdi:chat
       collapsed: true
@@ -216,7 +221,7 @@ blueprint:
         input_action_timeout:
           name: "⏳ Antwort-Timeout"
           description: >
-            Wartezeit auf eine Antwort-Aktion.
+            Wartezeit auf eine Antwort-Aktion (nur relevant, wenn keine periodische Wiederholung aktiv ist).
           default:
             hours: 0
             minutes: 0
@@ -468,7 +473,10 @@ variables:
   # Helper
   is_period_trigger: "{{ trigger.id == 'period' }}"
   now_ts: "{{ now() }}"
-  is_perodical: "{{ as_datetime(now_ts) != as_datetime(now_ts) + timedelta(**input_period) }}"
+  # Berechne Periodik (Prüfung, ob Periode > 0 ist)
+  period_seconds: "{{ timedelta(**input_period).total_seconds() | int }}"
+  is_periodical: "{{ period_seconds > 0 }}"
+  
   entity: >
     {% if is_period_trigger %}
       {{ trigger.event.data.entity }}
@@ -511,7 +519,7 @@ variables:
         {% set acts = acts + [ {'action':'ACT_3','title':a3_title,'destructive': a3_destructive} ] %}
       {% endif %}
     {% endif %}
-    {% if is_perodical %}
+    {% if is_periodical %}
       {% set acts = acts + [ {'action': action_tag, 'title': input_stop_button_text} ] %}
     {% endif %}
     {{ acts }}
@@ -570,7 +578,7 @@ variables:
       {% elif first == '>' %}
         {{ 'above' }}
       {% else %}
-        {{ 'above' }}  {# Fallback: kein Operator angegeben -> 'above' #}
+        {{ 'above' }}
       {% endif %}
     {% else %}
       {{ 'above' }}
@@ -588,7 +596,7 @@ variables:
     {% endif %}
 
   # Trigger-Bewertung (inkl. Multi-State und Multi-Numeric)
-  create_notifictaion: >
+  create_notification: >
     {{
       trigger.id in ['state_on','period']
       or (
@@ -611,7 +619,7 @@ condition:
       - condition: template
         value_template: >
           {{
-            (not create_notifictaion and input_notification_auto_delete)
+            (not create_notification and input_notification_auto_delete)
             or
             (trigger.id in ['state_off','num_multi_off','ms_off'] and input_notification_auto_delete)
           }}
@@ -620,12 +628,12 @@ condition:
           - condition: and
             conditions: !input input_custom_condition
           - condition: template
-            value_template: "{{ create_notifictaion }}"
+            value_template: "{{ create_notification }}"
 
 action:
   - if:
       - condition: template
-        value_template: "{{ create_notifictaion }}"
+        value_template: "{{ create_notification }}"
     then:
 
       # Nur bei Multi-Numerik: Verweilzeit korrekt prüfen, bevor gesendet wird
@@ -691,40 +699,61 @@ action:
                     sound: !input input_ios_sound
                   actions: "{{ action_buttons }}"
 
-      # Periodische Wiederholung
-      - if:
-          - condition: template
-            value_template: "{{ is_perodical }}"
-        then:
-          - wait_for_trigger:
-              - trigger: event
-                event_type: mobile_app_notification_action
-                event_data:
-                  action: "{{ action_tag }}"
-            timeout: !input input_period
-          - variables:
-              latest_state: "{{ states(entity) }}"
-              latest_trigger_id: >
-                {% if is_period_trigger %}
-                  {{ trigger.event.data.trigger_id }}
-                {% else %}
-                  {{ trigger.id }}
-                {% endif %}
-              latest_state_condition: >
-                {% if latest_trigger_id == 'state_on' %}
-                  {{ latest_state in input_entity_states }}
-                {% elif latest_trigger_id == 'ms_on' %}
-                  {{ (latest_state | lower) in ms_states_for_entity }}
-                {% elif latest_trigger_id == 'num_multi_on' %}
-                  {{ (latest_state | float(0)) > (nm_val_for_entity | float(0)) if nm_op_for_entity == 'above'
-                     else (latest_state | float(0)) < (nm_val_for_entity | float(0)) }}
-                {% endif %}
-          - if:
+      # -------------------------------------------------------------
+      # KOMBINIERTE WARTE-LOGIK (Periodik & Actions)
+      # -------------------------------------------------------------
+      - variables:
+          # Bestimme Timeout:
+          # Wenn periodisch, dann Periodendauer. Sonst Action-Timeout.
+          wait_timeout_seconds: >
+            {% if is_periodical %}
+              {{ period_seconds }}
+            {% else %}
+              {{ timedelta(**input_action_timeout).total_seconds() | int }}
+            {% endif %}
+
+      - wait_for_trigger:
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              tag: "{{ tag }}"
+        timeout: "{{ wait_timeout_seconds }}"
+
+      # Auswerten was passiert ist (Timeout oder Action)
+      - variables:
+          waited_trigger: "{{ wait.trigger }}"
+          
+          # Logik für Periodik-Check (Zustand noch gültig?)
+          latest_state: "{{ states(entity) }}"
+          latest_trigger_id: >
+            {% if is_period_trigger %}
+              {{ trigger.event.data.trigger_id }}
+            {% else %}
+              {{ trigger.id }}
+            {% endif %}
+          
+          # Prüfe, ob die Ursprungsbedingung immer noch wahr ist
+          latest_state_condition: >
+            {% if latest_trigger_id == 'state_on' %}
+              {{ latest_state in input_entity_states }}
+            {% elif latest_trigger_id == 'ms_on' %}
+              {{ (latest_state | lower) in ms_states_for_entity }}
+            {% elif latest_trigger_id == 'num_multi_on' %}
+              {{ (latest_state | float(0)) > (nm_val_for_entity | float(0)) if nm_op_for_entity == 'above'
+                 else (latest_state | float(0)) < (nm_val_for_entity | float(0)) }}
+            {% else %}
+              false
+            {% endif %}
+
+      - choose:
+          # FALL 1: Timeout ist abgelaufen UND Periodik ist aktiv UND Zustand gilt noch
+          # -> Neustart der Schleife (Periodik)
+          - conditions:
+              - condition: template
+                value_template: "{{ waited_trigger == none and is_periodical }}"
               - condition: template
                 value_template: "{{ latest_state_condition }}"
-              - condition: template
-                value_template: "{{ wait.trigger == none }}"
-            then:
+            sequence:
               - event: esn_event
                 event_data:
                   entity: "{{ entity }}"
@@ -732,36 +761,42 @@ action:
                   last_state: "{{ latest_state }}"
                   trigger_id: "{{ latest_trigger_id }}"
 
-      # Actionable: auf Antwort warten und ggf. HA-Aktionen ausführen
-      - wait_for_trigger:
-          - trigger: event
-            event_type: mobile_app_notification_action
-            event_data:
-              tag: "{{ tag }}"
-        timeout: !input input_action_timeout
-
-      - choose:
+          # FALL 2: Eine Aktion wurde gedrückt
           - conditions:
               - condition: template
-                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_1'] }}"
-              - condition: template
-                value_template: "{{ a1_enabled and a1_type == 'ha_action' }}"
-            sequence: !input input_action1_ha_action
-          - conditions:
-              - condition: template
-                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_2'] }}"
-              - condition: template
-                value_template: "{{ a2_enabled and a2_type == 'ha_action' }}"
-            sequence: !input input_action2_ha_action
-          - conditions:
-              - condition: template
-                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action in ['ACT_3'] }}"
-              - condition: template
-                value_template: "{{ a3_enabled and a3_type == 'ha_action' }}"
-            sequence: !input input_action3_ha_action
+                value_template: "{{ waited_trigger != none }}"
+            sequence:
+              - variables:
+                  pressed_action: "{{ waited_trigger.event.data.action }}"
+              - choose:
+                  # ACTION 1
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ pressed_action == 'ACT_1' }}"
+                      - condition: template
+                        value_template: "{{ a1_enabled and a1_type == 'ha_action' }}"
+                    sequence: !input input_action1_ha_action
+                  
+                  # ACTION 2
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ pressed_action == 'ACT_2' }}"
+                      - condition: template
+                        value_template: "{{ a2_enabled and a2_type == 'ha_action' }}"
+                    sequence: !input input_action2_ha_action
+                  
+                  # ACTION 3
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ pressed_action == 'ACT_3' }}"
+                      - condition: template
+                        value_template: "{{ a3_enabled and a3_type == 'ha_action' }}"
+                    sequence: !input input_action3_ha_action
+                  
+                  # Stop Button: Nichts tun (Loop endet hier, da kein 'event' gefeuert wird)
 
     else:
-      # Benachrichtigungen löschen
+      # Benachrichtigungen löschen (Clear)
       - action: notify.notify
         data:
           data:
@@ -772,6 +807,8 @@ action:
       - action: persistent_notification.dismiss
         data:
           notification_id: "{{ tag }}"
+      
+      # Eigene Verlassen-Aktion
       - variables:
           custom_action_off: !input input_custom_action_off
       - if:
