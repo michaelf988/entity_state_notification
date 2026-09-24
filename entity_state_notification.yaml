@@ -1,6 +1,9 @@
 blueprint:
-  name: "💬 Zustandsbenachrichtigung (Blueprint v1.5)"
+  name: "💬 Zustandsbenachrichtigung (Blueprint v1.6)"
   description: >
+    **Changelog v1.6:**
+    - FIX: Periodische Wiederholung funktioniert auch nach einem Reload der Automationen (z. B. Speichern, Blueprint-Re-Import), nicht erst nach HA-Neustart.
+
     **Changelog v1.5:**
     - FIX: Mehrfach-Zustände und Multi-Numerik lösen pro Zustandsänderung nur noch einen Lauf aus; Attributänderungen werden ignoriert. Gemeldet wird nur beim Eintritt in den Zielzustand bzw. beim Überschreiten der Schwelle.
     - FIX: Clear geht an die konfigurierten Geräte/Gruppen (statt notify.notify) und nur, wenn vorher der Zielzustand bzw. die Schwelle erreicht war.
@@ -425,12 +428,12 @@ triggers:
     entity_id: !input nm_entities
     to: ~
 
-  # Periodik
+  # Periodik. Kein event_data-Filter auf this.entity_id: Trigger-Templates
+  # werden beim Anhängen gerendert, nach einem Reload ist "this" dort leer und
+  # der Trigger passt nie. Zuordnung zur Automation erfolgt in conditions.
   - id: "period"
     trigger: event
     event_type: esn_event
-    event_data:
-      automation: "{{ this.entity_id }}"
 
 variables:
   # Inputs / Benachrichtigung
@@ -656,6 +659,11 @@ variables:
     }}
 
 conditions:
+  # Periodik-Events anderer Automationen ignorieren ("this" ist hier zur
+  # Laufzeit aktuell, auch nach einem Reload)
+  - condition: template
+    value_template: >
+      {{ trigger.id != 'period' or trigger.event.data.automation == this.entity_id }}
   - condition: or
     conditions:
       # Auto-Löschung nur, wenn der Zielzustand tatsächlich verlassen wurde
