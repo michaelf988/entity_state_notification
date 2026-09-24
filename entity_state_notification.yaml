@@ -1,6 +1,15 @@
 blueprint:
-  name: "💬 Zustandsbenachrichtigung (Blueprint v1.4)"
+  name: "💬 Zustandsbenachrichtigung (Blueprint v1.5)"
   description: >
+    **Changelog v1.5:**
+    - FIX: Mehrfach-Zustände und Multi-Numerik lösen pro Zustandsänderung nur noch einen Lauf aus; Attributänderungen werden ignoriert. Gemeldet wird nur beim Eintritt in den Zielzustand bzw. beim Überschreiten der Schwelle.
+    - FIX: Clear geht an die konfigurierten Geräte/Gruppen (statt notify.notify) und nur, wenn vorher der Zielzustand bzw. die Schwelle erreicht war.
+    - FIX: Multi-Numerik: nicht-numerische Zustände (unavailable, unknown) lösen weder Alarm noch Clear aus (kein Fehlalarm durch float(0) mehr).
+    - FIX: Verweilzeit (Multi-Numerik, Mehrfach-Zustände) entprellt jetzt wirklich: Meldung erst, wenn die Bedingung die ganze Dauer erfüllt war.
+    - FIX: Actionable Notifications vom Typ ha_action führen die HA-Aktion beim Antippen wieder aus (wait.trigger wurde als String ausgewertet).
+    - OPT: Eine neue Meldung beendet ältere wartende Läufe derselben Entität (keine doppelten Periodik-Schleifen/Aktionen).
+    - OPT: Syntax vereinheitlicht (triggers/conditions/actions).
+
     **Changelog v1.4:**
     - FIX: Actionable Notifications funktionieren nun auch während der periodischen Wartezeit (kein Blockieren mehr).
     - FIX: Diverse Tippfehler in Variablennamen behoben (create_notification, periodical).
@@ -388,7 +397,7 @@ blueprint:
 trigger_variables:
   input_entities: !input input_entities
 
-trigger:
+triggers:
   # Gleichheitsvergleiche (einfach)
   - id: "state_on"
     trigger: state
@@ -401,24 +410,20 @@ trigger:
     entity_id: !input input_entities
     not_to: !input input_entity_states
 
-  # Multi-State via Index
-  - id: "ms_on"
+  # Multi-State via Index (ein Trigger; Eintritt/Verlassen per Template,
+  # Verweilzeit per wait_template im Aktionsteil)
+  # to: ~ -> nur echte Zustandsänderungen, keine Attributänderungen
+  - id: "ms"
     trigger: state
     entity_id: !input ms_entities
-    for: !input input_entity_state_duration
+    to: ~
 
-  - id: "ms_off"
-    trigger: state
-    entity_id: !input ms_entities
-
-  # Multi-Numeric via Index (State-Trigger; Prüfung im Template + wait_template)
-  - id: "num_multi_on"
+  # Multi-Numeric via Index (ein Trigger; Schwelle per Template,
+  # Verweilzeit per wait_template im Aktionsteil)
+  - id: "num_multi"
     trigger: state
     entity_id: !input nm_entities
-
-  - id: "num_multi_off"
-    trigger: state
-    entity_id: !input nm_entities
+    to: ~
 
   # Periodik
   - id: "period"
@@ -434,6 +439,7 @@ variables:
   input_notify_groups: !input input_notify_groups
   input_stop_button_text: !input input_stop_button_text
   input_entity_states: !input input_entity_states
+  input_entity_state_duration: !input input_entity_state_duration
   input_notification_auto_delete: !input input_notification_auto_delete
   input_interruption_level: !input input_interruption_level
   input_ios_sound: !input input_ios_sound
@@ -476,7 +482,7 @@ variables:
   # Berechne Periodik (Prüfung, ob Periode > 0 ist)
   period_seconds: "{{ timedelta(**input_period).total_seconds() | int }}"
   is_periodical: "{{ period_seconds > 0 }}"
-  
+
   entity: >
     {% if is_period_trigger %}
       {{ trigger.event.data.entity }}
@@ -529,13 +535,13 @@ variables:
     {% if is_period_trigger %}
       {{ states(entity) }}
     {% else %}
-      {{ trigger.to_state.state }}
+      {{ trigger.to_state.state if trigger.to_state else 'unknown' }}
     {% endif %}
   old_state: >
     {% if is_period_trigger %}
       {{ trigger.event.data.last_state }}
     {% else %}
-      {{ trigger.from_state.state }}
+      {{ trigger.from_state.state if trigger.from_state else 'unknown' }}
     {% endif %}
 
   # Benachrichtigungsziele
@@ -595,34 +601,66 @@ variables:
       {{ 0 }}
     {% endif %}
 
+  # Zielzustand vor/nach der Änderung (Mehrere Zustände). Rohwerte direkt aus
+  # trigger.*_state, damit die Typumwandlung der Variablen nicht dazwischenfunkt
+  ms_new_active: >
+    {% if trigger.id == 'ms' and trigger.to_state %}
+      {{ (trigger.to_state.state | lower) in ms_states_for_entity }}
+    {% else %}
+      {{ false }}
+    {% endif %}
+  ms_old_active: >
+    {% if trigger.id == 'ms' and trigger.from_state %}
+      {{ (trigger.from_state.state | lower) in ms_states_for_entity }}
+    {% else %}
+      {{ false }}
+    {% endif %}
+
+  # Multi-Numerik: nicht-numerisch (unavailable, unknown, ...) zählt nie als
+  # "jenseits der Schwelle"
+  nm_new_numeric: >
+    {{ trigger.id == 'num_multi' and trigger.to_state is not none
+       and trigger.to_state.state | is_number }}
+  nm_new_active: >
+    {% if nm_new_numeric %}
+      {% set v = trigger.to_state.state | float %}
+      {{ (v > nm_val_for_entity) if nm_op_for_entity == 'above' else (v < nm_val_for_entity) }}
+    {% else %}
+      {{ false }}
+    {% endif %}
+  nm_old_active: >
+    {% if trigger.id == 'num_multi' and trigger.from_state is not none
+          and trigger.from_state.state | is_number %}
+      {% set v = trigger.from_state.state | float %}
+      {{ (v > nm_val_for_entity) if nm_op_for_entity == 'above' else (v < nm_val_for_entity) }}
+    {% else %}
+      {{ false }}
+    {% endif %}
+
   # Trigger-Bewertung (inkl. Multi-State und Multi-Numeric)
+  # Melden nur beim Eintritt (Flanke), nicht bei jeder weiteren Änderung
   create_notification: >
     {{
       trigger.id in ['state_on','period']
-      or (
-        trigger.id == 'num_multi_on' and (
-          (nm_op_for_entity == 'above' and (new_state | float(0)) > (nm_val_for_entity | float(0)))
-          or
-          (nm_op_for_entity == 'below' and (new_state | float(0)) < (nm_val_for_entity | float(0)))
-        )
-      )
-      or (
-        trigger.id == 'ms_on'
-        and (new_state | lower) in ms_states_for_entity
-      )
+      or (trigger.id == 'num_multi' and nm_new_active and not nm_old_active)
+      or (trigger.id == 'ms' and ms_new_active and not ms_old_active)
+    }}
+  # Löschen nur, wenn vorher gemeldet wurde (from_state im Zielzustand bzw.
+  # jenseits der Schwelle). Multi-Numerik: nicht-numerischer neuer Zustand -> nichts tun
+  clear_notification: >
+    {{
+      (trigger.id == 'state_off' and trigger.from_state is not none
+       and trigger.from_state.state in input_entity_states)
+      or (trigger.id == 'num_multi' and nm_new_numeric and nm_old_active and not nm_new_active)
+      or (trigger.id == 'ms' and ms_old_active and not ms_new_active)
     }}
 
-condition:
+conditions:
   - condition: or
     conditions:
-      # Auto-Löschung wenn NICHT mehr erfüllt ODER wenn ein Off-Trigger kommt
+      # Auto-Löschung nur, wenn der Zielzustand tatsächlich verlassen wurde
       - condition: template
-        value_template: >
-          {{
-            (not create_notification and input_notification_auto_delete)
-            or
-            (trigger.id in ['state_off','num_multi_off','ms_off'] and input_notification_auto_delete)
-          }}
+        value_template: "{{ clear_notification and input_notification_auto_delete }}"
       - condition: and
         conditions:
           - condition: and
@@ -630,30 +668,63 @@ condition:
           - condition: template
             value_template: "{{ create_notification }}"
 
-action:
+actions:
   - if:
       - condition: template
         value_template: "{{ create_notification }}"
     then:
 
-      # Nur bei Multi-Numerik: Verweilzeit korrekt prüfen, bevor gesendet wird
+      # Multi-Numerik: Verweilzeit (Entprellung). Gewartet wird auf "wieder im
+      # Normalbereich" (oder nicht-numerisch). Kommt das vor Ablauf -> Lauf beenden.
+      # Nur wenn die Schwelle die ganze Dauer überschritten blieb (Timeout) -> melden.
       - if:
           - condition: template
             value_template: >
-              {{ trigger.id == 'num_multi_on' and
-                 ( (input_numeric_entity_state_duration.hours|int > 0)
-                   or (input_numeric_entity_state_duration.minutes|int > 0)
-                   or (input_numeric_entity_state_duration.seconds|int > 0) ) }}
+              {{ trigger.id == 'num_multi' and
+                 ( (input_numeric_entity_state_duration.hours|int(0) > 0)
+                   or (input_numeric_entity_state_duration.minutes|int(0) > 0)
+                   or (input_numeric_entity_state_duration.seconds|int(0) > 0) ) }}
         then:
           - wait_template: >
-              {% set v = states(entity) | float(0) %}
-              {% if nm_op_for_entity == 'above' %}
-                {{ v > (nm_val_for_entity | float(0)) }}
+              {% set s = states(entity) %}
+              {% if s | is_number %}
+                {% set v = s | float %}
+                {{ not ((v > nm_val_for_entity) if nm_op_for_entity == 'above' else (v < nm_val_for_entity)) }}
               {% else %}
-                {{ v < (nm_val_for_entity | float(0)) }}
+                {{ true }}
               {% endif %}
             timeout: !input input_numeric_entity_state_duration
-            continue_on_timeout: false
+            continue_on_timeout: true
+          - if:
+              - condition: template
+                value_template: "{{ wait.completed }}"
+            then:
+              - stop: "Schwelle vor Ablauf der Verweilzeit wieder unterschritten"
+
+      # Mehrere Zustände: Verweilzeit analog (vorher "for" am Trigger)
+      - if:
+          - condition: template
+            value_template: >
+              {% set d = input_entity_state_duration %}
+              {{ trigger.id == 'ms' and
+                 ( (d.hours|int(0) > 0) or (d.minutes|int(0) > 0) or (d.seconds|int(0) > 0) ) }}
+        then:
+          - wait_template: >
+              {{ (states(entity) | lower) not in ms_states_for_entity }}
+            timeout: !input input_entity_state_duration
+            continue_on_timeout: true
+          - if:
+              - condition: template
+                value_template: "{{ wait.completed }}"
+            then:
+              - stop: "Zielzustand vor Ablauf der Verweilzeit verlassen"
+
+      # Ältere noch wartende Läufe (Periodik / Aktions-Timeout) derselben
+      # Entität beenden, damit keine doppelten Schleifen/Aktionen entstehen
+      - event: esn_cancel
+        event_data:
+          automation: "{{ this.entity_id }}"
+          entity: "{{ entity }}"
 
       # HA-Frontend-Notification (optional)
       - if:
@@ -717,12 +788,21 @@ action:
             event_type: mobile_app_notification_action
             event_data:
               tag: "{{ tag }}"
+          # Abbruch durch neueren Lauf derselben Entität
+          - trigger: event
+            event_type: esn_cancel
+            event_data:
+              automation: "{{ this.entity_id }}"
+              entity: "{{ entity }}"
         timeout: "{{ wait_timeout_seconds }}"
 
       # Auswerten was passiert ist (Timeout oder Action)
       - variables:
-          waited_trigger: "{{ wait.trigger }}"
-          
+          # wait.trigger nicht als Ganzes in eine Variable legen (wird dabei zum
+          # String) - nur die benötigten Felder übernehmen
+          waited_event_type: "{{ wait.trigger.event.event_type if wait.trigger else '' }}"
+          pressed_action: "{{ wait.trigger.event.data.action if wait.trigger else '' }}"
+
           # Logik für Periodik-Check (Zustand noch gültig?)
           latest_state: "{{ states(entity) }}"
           latest_trigger_id: >
@@ -731,18 +811,20 @@ action:
             {% else %}
               {{ trigger.id }}
             {% endif %}
-          
+
           # Prüfe, ob die Ursprungsbedingung immer noch wahr ist
+          # (ms_on / num_multi_on: Trigger-IDs bis v1.4, für laufende Periodik-Events)
           latest_state_condition: >
+            {% set s = states(entity) %}
             {% if latest_trigger_id == 'state_on' %}
-              {{ latest_state in input_entity_states }}
-            {% elif latest_trigger_id == 'ms_on' %}
-              {{ (latest_state | lower) in ms_states_for_entity }}
-            {% elif latest_trigger_id == 'num_multi_on' %}
-              {{ (latest_state | float(0)) > (nm_val_for_entity | float(0)) if nm_op_for_entity == 'above'
-                 else (latest_state | float(0)) < (nm_val_for_entity | float(0)) }}
+              {{ s in input_entity_states }}
+            {% elif latest_trigger_id in ['ms', 'ms_on'] %}
+              {{ (s | lower) in ms_states_for_entity }}
+            {% elif latest_trigger_id in ['num_multi', 'num_multi_on'] and s | is_number %}
+              {% set v = s | float %}
+              {{ (v > nm_val_for_entity) if nm_op_for_entity == 'above' else (v < nm_val_for_entity) }}
             {% else %}
-              false
+              {{ false }}
             {% endif %}
 
       - choose:
@@ -750,7 +832,7 @@ action:
           # -> Neustart der Schleife (Periodik)
           - conditions:
               - condition: template
-                value_template: "{{ waited_trigger == none and is_periodical }}"
+                value_template: "{{ waited_event_type == '' and is_periodical }}"
               - condition: template
                 value_template: "{{ latest_state_condition }}"
             sequence:
@@ -762,12 +844,12 @@ action:
                   trigger_id: "{{ latest_trigger_id }}"
 
           # FALL 2: Eine Aktion wurde gedrückt
+          # (esn_cancel = von neuerem Lauf abgebrochen -> nichts tun)
           - conditions:
               - condition: template
-                value_template: "{{ waited_trigger != none }}"
+                value_template: >
+                  {{ waited_event_type == 'mobile_app_notification_action' }}
             sequence:
-              - variables:
-                  pressed_action: "{{ waited_trigger.event.data.action }}"
               - choose:
                   # ACTION 1
                   - conditions:
@@ -776,7 +858,7 @@ action:
                       - condition: template
                         value_template: "{{ a1_enabled and a1_type == 'ha_action' }}"
                     sequence: !input input_action1_ha_action
-                  
+
                   # ACTION 2
                   - conditions:
                       - condition: template
@@ -784,7 +866,7 @@ action:
                       - condition: template
                         value_template: "{{ a2_enabled and a2_type == 'ha_action' }}"
                     sequence: !input input_action2_ha_action
-                  
+
                   # ACTION 3
                   - conditions:
                       - condition: template
@@ -792,22 +874,30 @@ action:
                       - condition: template
                         value_template: "{{ a3_enabled and a3_type == 'ha_action' }}"
                     sequence: !input input_action3_ha_action
-                  
+
                   # Stop Button: Nichts tun (Loop endet hier, da kein 'event' gefeuert wird)
 
     else:
-      # Benachrichtigungen löschen (Clear)
-      - action: notify.notify
-        data:
-          data:
-            tag: "{{ tag }}"
-            ttl: 0
-            priority: high
-          message: clear_notification
+      # Benachrichtigungen löschen (Clear) - an dieselben Ziele wie beim Senden.
+      # Erreichbar nur bei clear_notification (siehe conditions), d. h. wenn
+      # vorher tatsächlich gemeldet wurde.
+      - repeat:
+          count: "{{ notify | count | int }}"
+          sequence:
+            - variables:
+                index: "{{ repeat.index-1 }}"
+                notify_target: "{{ notify[index] }}"
+            - action: "{{ notify_target }}"
+              data:
+                message: clear_notification
+                data:
+                  tag: "{{ tag }}"
+                  ttl: 0
+                  priority: high
       - action: persistent_notification.dismiss
         data:
           notification_id: "{{ tag }}"
-      
+
       # Eigene Verlassen-Aktion
       - variables:
           custom_action_off: !input input_custom_action_off
