@@ -1,6 +1,9 @@
 blueprint:
-  name: "💬 Zustandsbenachrichtigung (Blueprint v1.6)"
+  name: "💬 Zustandsbenachrichtigung (Blueprint v1.7)"
   description: >
+    **Changelog v1.7:**
+    - FIX: Option "HA-Benachrichtigung (Frontend)" wird als Variable ausgewertet statt direkt als Template eingesetzt; Spook meldet bei deaktivierter Option keine "Templates, die nie zutreffen können" (Template: False) mehr.
+
     **Changelog v1.6:**
     - FIX: Periodische Wiederholung funktioniert auch nach einem Reload der Automationen (z. B. Speichern, Blueprint-Re-Import), nicht erst nach HA-Neustart.
 
@@ -448,6 +451,7 @@ variables:
   input_ios_sound: !input input_ios_sound
   input_group_text: !input input_group_text
   input_custom_tag: !input input_custom_tag
+  ha_notification: !input input_ha_notification
 
   # Actionable inputs
   input_action_timeout: !input input_action_timeout
@@ -737,7 +741,7 @@ actions:
       # HA-Frontend-Notification (optional)
       - if:
           - condition: template
-            value_template: !input input_ha_notification
+            value_template: "{{ ha_notification }}"
         then:
           - action: persistent_notification.create
             data:
